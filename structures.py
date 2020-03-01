@@ -1,5 +1,6 @@
 import math
 import matrix_math as x_math
+import data_handling
 
 class Matrix():
     """ A matrix object that has zero based indexing"""
@@ -34,6 +35,13 @@ class Matrix():
                 print(self.matrix[y][x], " ", end="")
             print("")
     
+    def copy(self):
+        new_matrix = Matrix(self.rows, self.cols)
+        for y in range(self.rows):
+            for x in range(self.cols): 
+                new_matrix.set_index(y, x, self.matrix[y][x])
+        return new_matrix
+    
     def no_rows(self):
         return self.rows
     
@@ -51,50 +59,108 @@ class Matrix():
     
     def set_row(self, y, values):
         self.matrix[y] = values
+
+    def sum_column(self, y):
+        return sum([point[y] for point in self.matrix])
+
+    def access_matrix(self):
+        return self.matrix
     
-    def matrix_to_point3d(self):
-        if self.no_rows() > 2:
-            point = Point3D((self.access_index(0,0), self.access_index(1,0), self.access_index(2,0)))
-        else:
-            point = Point3D((self.access_index(0,0), self.access_index(1,0), 0))
-        return point    
-
-class Point3D:
-    def __init__(self, position):
-          self.x = position[0]
-          self.y = position[1]
-          self.z = position[2]
-
-    """ Converts a point to a matrix """
-    def point3d_to_matrix(self):
-        matrix = Matrix(3, 1)
-        matrix.set_index(0, 0, self.x)
-        matrix.set_index(1, 0, self.y)
-        matrix.set_index(2, 0, self.z)
-        return matrix
-
-class Rotation3D(Point3D):
-    def __init__(self, position):
-        Point3D.__init__(self, position)
-    
-class Wireframe:
-    def __init__(self, position):
+class Object3D:
+    def __init__(self, name, colour):
+        self.name = name
         self.points = Matrix(0, 0)
+        self.projected = Matrix(0, 0)
+        self.surfaces = []
         self.lines = []
-        self.position = Point3D(position)
-        self.centre = Point3D(position)
+
+        self.centre = (0, 0, 0, 0)
+
+        self.colour = colour
+
+    def set_name(self, name):
+        self.name = name
+    
+    def set_surface_colour(self, colour):
+        self.colour = colour
+
+    def surface_mean_y(self, surface):
+        sum = 0
+        for point in surface:
+            sum += self.projected.access_row(point)[1]
+        return sum / len(surface)
+
+    def surface_mean_z(self, surface):
+        sum = 0
+        for point in surface:
+            sum += self.projected.access_row(point)[2]
+        return sum / len(surface)
+
+    def order_surfaces(self):
+        """ Surfaces must be ordered so that the closest surfaces are drawn first to remove display errors where surfaces furhter behind are drawn over closer surfaces """
+        """ Uses insertion sort """
+        for i in range(len(self.surfaces)):
+            current = self.surfaces[i]
+            index = i
+            while index > 0 and self.surface_mean_z(self.surfaces[index-1]) > self.surface_mean_z(current):
+                self.surfaces[index] = self.surfaces[index-1]
+                index -= 1
+            self.surfaces[index] = current
+        return self.surfaces
+        
+    def find_points(self, surface):
+        """ Returns a list of coordinates in a given surface """
+        points = []
+        for point in surface:
+            points.append(self.projected.access_row(point)[:2])
+        return points
+
+    def hue(self, surface, lighting_factor):
+        return int(data_handling.map(-(self.surface_mean_y(surface) - self.find_centre()[1]), - self.surface_mean_y(surface) / lighting_factor, self.surface_mean_y(surface) / lighting_factor, 0, 255))
+
+    def map_colour(self, surface, lighting_factor):
+        colours = {'red': (0, self.hue(surface, lighting_factor), self.hue(surface, lighting_factor)), 'magenta': (0, self.hue(surface, lighting_factor), 0), 'green': (self.hue(surface, lighting_factor), 255, self.hue(surface, lighting_factor)),
+                   'blue': (self.hue(surface, lighting_factor), self.hue(surface, lighting_factor), 255), 'yellow': (255, 255, self.hue(surface, lighting_factor)), 'cyan': (self.hue(surface, lighting_factor), 255, 255),
+                   'grey': (self.hue(surface, lighting_factor), self.hue(surface, lighting_factor), self.hue(surface, lighting_factor))
+                    }
+        if self.colour in colours:
+            return colours[self.colour]
+        else:
+            print ('ERROR: Choose a colour from: \'red\', \'green\', \'blue\', \'purple\', \'yellow\', \'orange\', \'grey\'')
+
+    def viewer_relativity(self, viewer_width, viewer_height):
+        """ Returns an array of the directions to which the object is off the screen """
+        x, y = self.find_centre()[0], self.find_centre()[1]
+        directions = []
+        if x < 0:
+            directions.append('W')
+        if x > viewer_width:
+            directions.append('E')
+        if y < 0:
+            directions.append('N')
+        if y > viewer_height:
+            directions.append('S')
+        return directions
+
+    def check_render_distance(self, max_render_distance, min_render_distance):
+        if self.find_centre()[2] < max_render_distance or self.find_centre()[2] > min_render_distance:
+            return False
+        else:
+            return True
+
+    def is_visible(self, viewer_width, viewer_height):
+        return True if (len(self.viewer_relativity(viewer_width, viewer_height)) == 0) else False
 
     def add_points(self, points):
-        ones_column = Matrix(len(points), 1, 1)
-        ones_added = x_math.h_stack(points, ones_column)
-        self.points = ones_added
-        #for point in points:
-        #    self.points.append(Point3D(point))
+        new_column = Matrix(len(points), 1, 1)
+        new_matrix = x_math.h_stack(points, new_column)
+        self.points = new_matrix
         
     def add_lines(self, lines):
         self.lines += lines
-        #for (start, end) in lines:
-        #    self.lines.append(Line(self.points[start], self.points[end]))
+    
+    def add_surfaces(self, surfaces):
+        self.surfaces += surfaces
 
     def show_points(self):
         for i, (x, y, z) in enumerate(self.points):
@@ -103,56 +169,61 @@ class Wireframe:
     def show_lines(self):
         for i, (node_1, node_2) in enumerate(self.lines):
             print('{}: {} to {}'.format(i, node_1, node_2))
+
+    def project(self, projection_type, projection_anchor):
+        self.projected = self.points.copy()
+        for i, point in enumerate(self.projected):
+            if projection_type == 'orthographic':
+                projection_matrix = x_math.orthographic_projection_matrix()
+            elif projection_type == 'perspective':
+                projection_matrix = x_math.perspective_projection_matrix(point[2])
+            else:
+                print('ERROR: Invaild projection type entered: {}'.format(projection_type))
+            self.projected.set_row(i, x_math.add_vector(x_math.multiply(x_math.add_vector(point, x_math.inverse_vector(projection_anchor)), projection_matrix), projection_anchor).access_row(0))
     
     def translate(self, translation):
-        for point in self.points:
-            for axis_no, axis in enumerate(['x', 'y', 'z']):
-                point[axis_no] += getattr(translation, axis)
+        translation_matrix = x_math.translation_matrix(*translation)
+        self.points = x_math.multiply(self.points, translation_matrix)
 
     def scale(self, scale_factor, anchor = None): # Anchor is a point object which stores the point to scale from
         """ Scales the object from an arbetrary point """
-        if anchor == None:
-            # If no anchor is provided, scale from objects centre
+        if anchor == None:  # If no anchor is provided, scale from objects centre
             anchor = self.find_centre()
-        for point in self.points:
-            point[0] = anchor.x + scale_factor * (point[0] - anchor.x)
-            point[1] = anchor.y + scale_factor * (point[1] - anchor.y)
-            point[2] *= scale_factor
+        scale_matrix = x_math.scale_matrix(*scale_factor)
+        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), scale_matrix), anchor) # Equivalent to self.points = scale_factor * (self.points - anchor) + anchor
 
     def find_centre(self):
-        x = sum([point[0] for point in self.points]) / len(self.points)
-        y = sum([point[1] for point in self.points]) / len(self.points)
-        z = sum([point[2] for point in self.points]) / len(self.points)
-        return Point3D((x, y, z))
+        cx = self.points.sum_column(0) / len(self.points)
+        cy = self.points.sum_column(1) / len(self.points)
+        cz = self.points.sum_column(2) / len(self.points)
+        return (cx, cy, cz, 0)
+    
+    def no_points(self):
+        return len(self.points)
 
-    def _rotate_z(self, anchor, z_rotation):        
-        for point in self.points:
-            x = point[0] - anchor.x
-            y = point[1] - anchor.y
-            hypot = math.hypot(y, x)
-            new_z_rotation  = math.atan2(y, x) + z_rotation
-            point[0] = anchor.x + hypot * math.cos(new_z_rotation)
-            point[1] = anchor.y + hypot * math.sin(new_z_rotation)
+    def sum_x(self):
+        return self.points.sum_column(0)
 
-    def _rotate_x(self, anchor, x_rotation):        
-        for point in self.points:
-            y = point[1] - anchor.y
-            z = point[2] - anchor.z
-            hypot = math.hypot(y, z)
-            new_x_rotation  = math.atan2(y, z) + x_rotation
-            point[2] = anchor.z + hypot * math.cos(new_x_rotation)
-            point[1] = anchor.y + hypot * math.sin(new_x_rotation)
+    def sum_y(self):
+        return self.points.sum_column(1)
 
-    def _rotate_y(self, anchor, y_rotation):        
-        for point in self.points:
-            x = point[0] - anchor.x
-            z = point[2] - anchor.z
-            hypot = math.hypot(x, z)
-            new_y_rotation  = math.atan2(x, z) + y_rotation
-            point[2] = anchor.z + hypot * math.cos(new_y_rotation)
-            point[0] = anchor.x + hypot * math.sin(new_y_rotation)
+    def sum_z(self):
+        return self.points.sum_column(2)
 
-    def rotate(self, anchor, rotation):
-        self._rotate_x(anchor, rotation.x)
-        self._rotate_y(anchor, rotation.y)
-        self._rotate_z(anchor, rotation.z)
+    def _rotate_z(self, anchor, z_rotation):      
+        rotate_z_matrix = x_math.rotate_z_matrix(z_rotation)  
+        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), rotate_z_matrix), anchor)
+
+    def _rotate_x(self, anchor, x_rotation):
+        rotate_x_matrix = x_math.rotate_x_matrix(x_rotation)        
+        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), rotate_x_matrix), anchor)
+
+    def _rotate_y(self, anchor, y_rotation):
+        rotate_y_matrix = x_math.rotate_y_matrix(y_rotation)      
+        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), rotate_y_matrix), anchor)
+
+    def rotate(self, rotation, anchor):
+        rx, ry, rz = rotation
+        self._rotate_x(anchor, rx)
+        self._rotate_y(anchor, ry)
+        self._rotate_z(anchor, rz)
