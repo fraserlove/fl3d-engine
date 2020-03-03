@@ -47,6 +47,7 @@ class Engine3D:
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
     
     def entities_centre(self, entities = None):
+        centre = (0, 0, 0, 0)
         if entities == None:
             entities = self.objects.keys()
 
@@ -56,8 +57,9 @@ class Engine3D:
             total_y += self.objects[object_3d].sum_y()
             total_z += self.objects[object_3d].sum_z()
             no_points += self.objects[object_3d].no_points()
-            
-        return (total_x / no_points, total_y / no_points, total_z / no_points, 0)
+        if no_points > 0:
+           centre = (total_x / no_points, total_y / no_points, total_z / no_points, 0)
+        return centre
 
     def order_objects(self):
         for i in range(len(self.objects)):
@@ -68,3 +70,6 @@ class Engine3D:
                 index -= 1
             self.objects[list(self.objects.keys())[index]] = current
         return self.objects
+
+    def clear_all_objects(self):
+        self.objects = {}

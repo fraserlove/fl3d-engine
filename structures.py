@@ -112,7 +112,7 @@ class Object3D:
         """ Returns a list of coordinates in a given surface """
         points = []
         for point in surface:
-            points.append(self.projected.access_row(point)[:2])
+            points.append([int(self.projected.access_row(point)[0]), int(self.projected.access_row(point)[1])])
         return points
 
     def hue(self, surface, lighting_factor):

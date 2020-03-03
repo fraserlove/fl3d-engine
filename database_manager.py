@@ -31,11 +31,10 @@ class DatabaseManager():
         self.conn.commit()
         print('SUCCESS: Object data saved')
 
-    def load_objects(self, engine):
+    def import_objects(self, engine):
         for name, colour, points, lines, surfaces in self.cursor.execute('SELECT * FROM ObjectData'):
             object_3d = Object3D(name, colour)
             object_3d.add_points(Matrix(data_handling.string_to_2d_float_array(points, 3)))
             object_3d.add_lines(data_handling.string_to_2d_int_array(lines, 2))
             object_3d.add_surfaces(data_handling.string_to_2d_int_array(surfaces, 4))
             engine.add_object(object_3d)
-
