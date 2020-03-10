@@ -78,3 +78,10 @@ class Sphere(Object3D):
         self.add_points(Matrix(points))
         self.add_lines(lines)
         self.add_surfaces(surfaces)
+
+class GUILines(Object3D):
+    def __init__(self, position, length, colour = 'grey'):
+        Object3D.__init__(self, name = 'GUI_Line', colour = colour)
+        self.add_points(Matrix([[position[0], position[1], position[2]], [position[0] + length, position[1], position[2]],
+                                [position[0], position[1] + length, position[2]]]))
+        self.add_lines([(0,1), (0,2)])

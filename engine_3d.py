@@ -1,6 +1,12 @@
+import matrix_math
+
 class Engine3D:
     def __init__(self, projection_type = 'orthographic', projection_anchor = (0, 0, 0, 0)):
         self.objects = {}
+        self.translation_lines = None
+
+        self.rendered_translation_lines = []
+        self.rendered_points = [[]]
 
         self.projection_type = projection_type
         self.projection_anchor = projection_anchor
@@ -8,6 +14,10 @@ class Engine3D:
     def add_object(self, object_3d):
         self.objects[object_3d.name] = object_3d
         object_3d.project(self.projection_type, self.projection_anchor)
+
+    def set_translation_lines(self, translation_lines):
+        self.translation_lines = translation_lines
+        translation_lines.projected = translation_lines.points
 
     def translate(self, dx, dy, dz, entities = None):
         if entities == None:
@@ -18,6 +28,9 @@ class Engine3D:
             for object_3d in entities:
                 self.objects[object_3d].translate((dx, dy, dz))
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
+        if self.translation_lines != None:
+            self.translation_lines.translate((dx, dy, dz))
+            self.translation_lines.projected = self.translation_lines.points
 
     def scale(self, kx, ky, kz, anchor = None, entities = None):
         if anchor == None:
@@ -31,6 +44,9 @@ class Engine3D:
             for object_3d in entities:
                 self.objects[object_3d].scale((kx, ky, kz), anchor)
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
+        if self.translation_lines != None:
+            self.translation_lines.scale((kx, ky, kz), anchor)
+            self.translation_lines.projected = self.translation_lines.points
 
     def rotate(self, rx, ry, rz, anchor = None, entities = None):
         if anchor == None:
@@ -45,6 +61,9 @@ class Engine3D:
             for object_3d in entities:
                 self.objects[object_3d].rotate((rx, ry, rz), anchor)
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
+        if self.translation_lines != None:
+            self.translation_lines.rotate((rx, ry, rz), anchor)
+            self.translation_lines.projected = self.translation_lines.points
     
     def entities_centre(self, entities = None):
         centre = (0, 0, 0, 0)
@@ -73,3 +92,12 @@ class Engine3D:
 
     def clear_all_objects(self):
         self.objects = {}
+
+    def clear_rendered_points(self):
+        self.rendered_points = []
+
+    def clear_translation_lines(self):
+        self.translation_lines = None
+    
+    def get_translation_lines(self):
+        return self.translation_lines

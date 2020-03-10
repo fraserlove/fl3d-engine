@@ -1,5 +1,5 @@
 import math
-import matrix_math as x_math
+import matrix_math
 import data_handling
 
 class Matrix():
@@ -66,7 +66,7 @@ class Matrix():
     def access_matrix(self):
         return self.matrix
     
-class Object3D:
+class Object3D():
     def __init__(self, name, colour):
         self.name = name
         self.points = Matrix(0, 0)
@@ -88,13 +88,13 @@ class Object3D:
         sum = 0
         for point in surface:
             sum += self.projected.access_row(point)[1]
-        return sum / len(surface)
+        return data_handling.div_non_zero(sum, len(surface))
 
     def surface_mean_z(self, surface):
         sum = 0
         for point in surface:
             sum += self.projected.access_row(point)[2]
-        return sum / len(surface)
+        return data_handling.div_non_zero(sum, len(surface))
 
     def order_surfaces(self):
         """ Surfaces must be ordered so that the closest surfaces are drawn first to remove display errors where surfaces furhter behind are drawn over closer surfaces """
@@ -116,7 +116,7 @@ class Object3D:
         return points
 
     def hue(self, surface, lighting_factor):
-        return int(data_handling.map(-(self.surface_mean_y(surface) - self.find_centre()[1]), - self.surface_mean_y(surface) / lighting_factor, self.surface_mean_y(surface) / lighting_factor, 0, 255))
+        return int(data_handling.map(-(self.surface_mean_y(surface) - self.find_centre()[1]), data_handling.div_non_zero(- self.surface_mean_y(surface), lighting_factor), data_handling.div_non_zero(self.surface_mean_y(surface), lighting_factor), 0, 255))
 
     def map_colour(self, surface, lighting_factor):
         colours = {'red': (0, self.hue(surface, lighting_factor), self.hue(surface, lighting_factor)), 'magenta': (0, self.hue(surface, lighting_factor), 0), 'green': (self.hue(surface, lighting_factor), 255, self.hue(surface, lighting_factor)),
@@ -143,7 +143,7 @@ class Object3D:
         return directions
 
     def check_render_distance(self, max_render_distance, min_render_distance):
-        if self.find_centre()[2] < max_render_distance or self.find_centre()[2] > min_render_distance:
+        if self.find_centre()[2] < data_handling.div_non_zero(1, max_render_distance) or self.find_centre()[2] > data_handling.div_non_zero(1, min_render_distance):
             return False
         else:
             return True
@@ -153,7 +153,7 @@ class Object3D:
 
     def add_points(self, points):
         new_column = Matrix(len(points), 1, 1)
-        new_matrix = x_math.h_stack(points, new_column)
+        new_matrix = matrix_math.h_stack(points, new_column)
         self.points = new_matrix
         
     def add_lines(self, lines):
@@ -174,28 +174,28 @@ class Object3D:
         self.projected = self.points.copy()
         for i, point in enumerate(self.projected):
             if projection_type == 'orthographic':
-                projection_matrix = x_math.orthographic_projection_matrix()
+                projection_matrix = matrix_math.orthographic_projection_matrix()
             elif projection_type == 'perspective':
-                projection_matrix = x_math.perspective_projection_matrix(point[2])
+                projection_matrix = matrix_math.perspective_projection_matrix(point[2])
             else:
                 print('ERROR: Invaild projection type entered: {}'.format(projection_type))
-            self.projected.set_row(i, x_math.add_vector(x_math.multiply(x_math.add_vector(point, x_math.inverse_vector(projection_anchor)), projection_matrix), projection_anchor).access_row(0))
+            self.projected.set_row(i, matrix_math.add_vector(matrix_math.multiply(matrix_math.add_vector(point, matrix_math.inverse_vector(projection_anchor)), projection_matrix), projection_anchor).access_row(0))
     
     def translate(self, translation):
-        translation_matrix = x_math.translation_matrix(*translation)
-        self.points = x_math.multiply(self.points, translation_matrix)
+        translation_matrix = matrix_math.translation_matrix(*translation)
+        self.points = matrix_math.multiply(self.points, translation_matrix)
 
     def scale(self, scale_factor, anchor = None): # Anchor is a point object which stores the point to scale from
         """ Scales the object from an arbetrary point """
         if anchor == None:  # If no anchor is provided, scale from objects centre
             anchor = self.find_centre()
-        scale_matrix = x_math.scale_matrix(*scale_factor)
-        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), scale_matrix), anchor) # Equivalent to self.points = scale_factor * (self.points - anchor) + anchor
+        scale_matrix = matrix_math.scale_matrix(*scale_factor)
+        self.points = matrix_math.add_vector(matrix_math.multiply(matrix_math.add_vector(self.points, matrix_math.inverse_vector(anchor)), scale_matrix), anchor) # Equivalent to self.points = scale_factor * (self.points - anchor) + anchor
 
     def find_centre(self):
-        cx = self.points.sum_column(0) / len(self.points)
-        cy = self.points.sum_column(1) / len(self.points)
-        cz = self.points.sum_column(2) / len(self.points)
+        cx = data_handling.div_non_zero(self.points.sum_column(0), len(self.points))
+        cy = data_handling.div_non_zero(self.points.sum_column(1), len(self.points))
+        cz = data_handling.div_non_zero(self.points.sum_column(2), len(self.points))
         return (cx, cy, cz, 0)
     
     def no_points(self):
@@ -211,16 +211,16 @@ class Object3D:
         return self.points.sum_column(2)
 
     def _rotate_z(self, anchor, z_rotation):      
-        rotate_z_matrix = x_math.rotate_z_matrix(z_rotation)  
-        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), rotate_z_matrix), anchor)
+        rotate_z_matrix = matrix_math.rotate_z_matrix(z_rotation)  
+        self.points = matrix_math.add_vector(matrix_math.multiply(matrix_math.add_vector(self.points, matrix_math.inverse_vector(anchor)), rotate_z_matrix), anchor)
 
     def _rotate_x(self, anchor, x_rotation):
-        rotate_x_matrix = x_math.rotate_x_matrix(x_rotation)        
-        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), rotate_x_matrix), anchor)
+        rotate_x_matrix = matrix_math.rotate_x_matrix(x_rotation)        
+        self.points = matrix_math.add_vector(matrix_math.multiply(matrix_math.add_vector(self.points, matrix_math.inverse_vector(anchor)), rotate_x_matrix), anchor)
 
     def _rotate_y(self, anchor, y_rotation):
-        rotate_y_matrix = x_math.rotate_y_matrix(y_rotation)      
-        self.points = x_math.add_vector(x_math.multiply(x_math.add_vector(self.points, x_math.inverse_vector(anchor)), rotate_y_matrix), anchor)
+        rotate_y_matrix = matrix_math.rotate_y_matrix(y_rotation)      
+        self.points = matrix_math.add_vector(matrix_math.multiply(matrix_math.add_vector(self.points, matrix_math.inverse_vector(anchor)), rotate_y_matrix), anchor)
 
     def rotate(self, rotation, anchor):
         rx, ry, rz = rotation

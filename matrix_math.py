@@ -113,3 +113,10 @@ def rotate_z_matrix(rz):
         [0, 0, 1, 0],
         [0, 0, 0, 1],
     ])
+
+def convert_to_int_matrix(matrix):
+    result = structures.Matrix(matrix.no_rows(), matrix.no_cols())
+    for y in range(matrix.no_rows()): 
+         for x in range(matrix.no_cols()):
+             result.set_index(y, x, int(matrix.access_index(y, x)))
+    return result

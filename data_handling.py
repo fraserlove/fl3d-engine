@@ -58,3 +58,9 @@ def map(value, left_min, left_max, right_min, right_max):
     elif mapped_value < right_min:
         mapped_value = right_min
     return mapped_value
+
+def convert_to_int_array(array):
+    result = []
+    for element in array:
+        result.append(int(element))
+    return result
