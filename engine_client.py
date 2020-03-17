@@ -1,28 +1,31 @@
-import pygame, sys, os, time, threading
-from ctypes import windll
-import matplotlib.animation as animation
+import sys, os, time, datetime, threading
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
 
 from engine_3d import Engine3D
 from shapes import Cube, Quad, Plane, Polygon, Sphere, GUILines
 from database_manager import DatabaseManager
 from camera import Camera
-from gui import GUI, CoordinateInput
+from gui import GUI, CoordinateInput, ResponsiveText
+from launcher import Launcher
 import data_handling
 
 """ For rotation of all objects use self.viewer_centre to spin all objects """
 """ For individual rotation of one ore multiple objects use objects = [] in engine.rotate() with array of object lables """
 """ For combined spin over multiple objects use objects = [] in engine.rotate() with array of object lables """
 
-""" Add ablity to click on points and enter new values """
-""" Clean up lighting wrt moving objects to top of screen increasing contrast """
-""" Login system """
-""" Add ability to change object rotation and direction using clicking on objects """
-""" Add ability to change object rotation anchor point """
-""" Add ability to add objects from GUI, (click and drag) and set values """
+''' Update db when loading objects to include new variables '''
+''' Help screen '''
+''' Reset fps graph and anchor to objects centre'''
+''' Add ability to edit object using same gui as to create '''
+''' Add ability to copy objects '''
+''' Add ability to rename objects '''
+''' Add object outliner '''
+''' Add ability to set position to centre of screen when creating an object '''
 """ Include ability to save user settings """
 
 class EngineClient():
-    def __init__(self, width, height):
+    def __init__(self, width, height, login_sys):
 
         self.line_colour = (255, 255, 255)
         self.point_colour = (255, 255, 255)
@@ -36,7 +39,7 @@ class EngineClient():
         self.scaling_factor = 1.1
         self.movement_factor = 25
         self.max_frame_rate = 1000
-        self.max_render_distance = 1
+        self.max_render_distance = 0
         self.min_render_distance = 1 / 10000
 
         self.displacement_arrows = 0
@@ -56,17 +59,19 @@ class EngineClient():
         self.fps_graph_interval = 500
         self.start_time = time.time()
 
-        self.gui_line_length = 20
-        self.gui_line_width = 4
-
         self.chosen_point = None
+        self.chosen_rotation_anchor = None
         self.clickable_radius = 5 # The radius at which a point can be clicked beyond its shown radius
         self.translating, self.translating_x, self.translating_y = False, False, False
         self.input_boxes = None
+        self.responsive_text = None
+        self.use_custom_rotation_anchor = False
+        self.running = True
 
         self.camera = Camera(self)
-        self.db_manager = DatabaseManager('ObjectData.db')
-        self.gui = GUI(self, width, height)
+        self.login_sys = login_sys
+        self.db_manager = DatabaseManager('EngineData.db')
+        self.gui = GUI(self, self.db_manager, width, height)
         self.engine = Engine3D('orthographic', self.gui.viewer_centre)
 
         pygame.init()
@@ -77,24 +82,6 @@ class EngineClient():
         self.logo = pygame.image.load('FL3D_small.png')
         self.logo_size = (197, 70)
 
-        self.db_manager.create_database()
-        self.construct_session()
-        
-    def construct_session(self):
-
-        if self.create_objects:
-            self.instantiate_entities()
-
-        fps_animation = self.gui.animate_fps_graph()
-
-        if __name__ == '__main__':
-            self.running = True
-            self.run()
-
-    def instantiate_entities(self):
-        self.engine.add_object(Quad('quad1', (300, 200, 10), 10, 100, 200, 'blue'))
-        self.engine.add_object(Quad('quad2', (300, 250, 60), 10, 100, 200, 'red'))
-        self.engine.add_object(Sphere('quad2', (300, 250, 60), 10, 10, 'red'))
 
     def save_world(self):
         self.db_manager.save_objects(self.engine.objects)
@@ -102,12 +89,13 @@ class EngineClient():
     def debug_display(self, object_3d):
         pygame.draw.circle(self.viewer, (255, 0, 0), (int(object_3d.points.access_index(0, 0)), int(object_3d.points.access_index(0, 1))), self.point_radius, 0)
         pygame.draw.circle(self.viewer, (0, 255, 0), (int(object_3d.find_centre()[0]), int(object_3d.find_centre()[1])), self.point_radius, 0)
-        pygame.draw.circle(self.viewer, (0, 0, 255), (int(self.engine.entities_centre(self.engine.objects)[0]), int(self.engine.entities_centre(self.engine.objects)[1])), self.point_radius, 0)
+        pygame.draw.circle(self.viewer, (0, 0, 255), (int(self.rotation_anchor[0]), int(self.rotation_anchor[1])), self.point_radius, 0)
     
     def close_window(self):
         self.gui.destruct_gui()
         self.running_fps = False
         self.running = False
+        self.db_manager.update_login_time(self.login_sys.username, datetime.datetime.now())
         self.db_manager.close_database()
         pygame.quit()
 
@@ -125,8 +113,10 @@ class EngineClient():
             self.gui.maximise_window = False
 
     def run(self):
+        fps_animation = self.gui.animate_fps_graph()
         while self.running:
-            pygame.mouse.set_cursor(*pygame.cursors.broken_x)
+            pygame.mouse.set_cursor(*pygame.cursors.broken_x) # Ran every update to make sure that cursor stays on pygame cursor when in engine
+
             for event in pygame.event.get():
                 if event.type == pygame.KEYDOWN:
                     if event.key in self.camera.controls: 
@@ -139,65 +129,119 @@ class EngineClient():
                     self.translating = False
                 elif event.type == pygame.MOUSEMOTION:
                     self.check_translation(pygame.mouse.get_pos())
+                    self.check_rotation_anchor(pygame.mouse.get_pos())
                 if self.input_boxes != None:
                     for input_box in self.input_boxes.access_input_boxes():
                         input_box.handle_event(event, self.movement_factor)
 
+            if not self.use_custom_rotation_anchor:
+                self.rotation_anchor = self.engine.entities_centre(self.engine.objects)
+
             self.render_objects()
+            self.gui.update_world_objects()
             pygame.display.flip()
             self.clock.tick(self.max_frame_rate)
+            self.engine.update_operating_status(False)
             if self.running:
                 self.gui.root.update()
 
     def check_translation_lines(self, mouse_position):
         for rendered_point in self.engine.rendered_points:
-            if self.check_chosen_point_radius(rendered_point[0], mouse_position):
-                self.current_translation_point = rendered_point[1]
+            if self.check_object_radius(rendered_point[0], mouse_position):
+                self.chosen_rotation_anchor, self.responsive_text = None, None
                 self.engine.clear_translation_lines()
-                translation_lines = GUILines(rendered_point[1], self.gui_line_length)
+                translation_lines = GUILines(rendered_point[1], self.gui.translation_line_length)
                 self.engine.set_translation_lines(translation_lines)
                 if rendered_point == self.chosen_point:
                     self.engine.clear_translation_lines()
                     self.chosen_point, self.input_boxes = None, None
                 else:
                     self.chosen_point = rendered_point
-                    self.input_boxes = CoordinateInput(rendered_point[0][0], rendered_point[0][1], rendered_point[0][2])
+                    self.input_boxes = CoordinateInput(*rendered_point[1][:3], rendered_point, self.engine, self.viewer)
                 break
 
-    def check_chosen_point_radius(self, line, mouse_position):
+        if self.check_point_radius(self.rotation_anchor, mouse_position):
+            self.chosen_point, self.input_boxes = None, None
+            if self.rotation_anchor == self.chosen_rotation_anchor:
+                self.engine.clear_translation_lines()
+                self.chosen_rotation_anchor, self.responsive_text = None, None
+            else:
+                self.chosen_rotation_anchor = self.rotation_anchor
+                self.engine.clear_translation_lines()
+                translation_lines = GUILines(self.rotation_anchor[:3], self.gui.translation_line_length)
+                self.engine.set_translation_lines(translation_lines)
+                self.responsive_text = ResponsiveText(*self.rotation_anchor[:2], 'Rotation Anchor')
+
+    def check_point_radius(self, point, mouse_position):
         click_in_radius = False
         for x_position in range(mouse_position[0] - self.clickable_radius, mouse_position[0] + self.clickable_radius):
             for y_position in range(mouse_position[1] - self.clickable_radius, mouse_position[1] + self.clickable_radius):
-                if line.collidepoint((x_position, y_position)):
+                if int(point[0]) == x_position and int(point[1]) == y_position:
+                    click_in_radius = True
+        return click_in_radius
+
+    def check_object_radius(self, pygame_object, mouse_position):
+        click_in_radius = False
+        for x_position in range(mouse_position[0] - self.clickable_radius, mouse_position[0] + self.clickable_radius):
+            for y_position in range(mouse_position[1] - self.clickable_radius, mouse_position[1] + self.clickable_radius):
+                if pygame_object.collidepoint((x_position, y_position)):
                     click_in_radius = True
         return click_in_radius
     
     def check_translation(self, mouse_position):
         if len(self.engine.rendered_translation_lines) > 0 and self.translating and self.chosen_point != None:
-            if self.check_chosen_point_radius(self.engine.rendered_translation_lines[0], mouse_position) and self.translating_x == False and self.translating_y == False:
+            if self.check_object_radius(self.engine.rendered_translation_lines[0], mouse_position) and self.translating_x == False and self.translating_y == False:
                 self.translating_x = True
                 self.translating_y = False
-            if self.check_chosen_point_radius(self.engine.rendered_translation_lines[1], mouse_position) and self.translating_y == False and self.translating_x == False:
+            if self.check_object_radius(self.engine.rendered_translation_lines[1], mouse_position) and self.translating_y == False and self.translating_x == False:
                 self.translating_y = True
                 self.translating_x = False
 
             if self.translating_x:
                 current_row = self.chosen_point[2].points.access_row(self.chosen_point[3])
-                new_row = mouse_position[0] - self.gui_line_length / 2, current_row[1], current_row[2], current_row[3]
+                new_row = mouse_position[0] - self.gui.translation_line_length / 2, current_row[1], current_row[2], current_row[3]
                 self.chosen_point[2].points.set_row(self.chosen_point[3], new_row)
                 self.chosen_point[2].project(self.engine.projection_type, self.engine.projection_anchor)
-                translation_lines = GUILines(self.chosen_point[2].projected.access_row(self.chosen_point[3]), self.gui_line_length)
+                translation_lines = GUILines(self.chosen_point[2].projected.access_row(self.chosen_point[3]), self.gui.translation_line_length)
                 self.engine.set_translation_lines(translation_lines)
 
             if self.translating_y:
                 current_row = self.chosen_point[2].points.access_row(self.chosen_point[3])
-                new_row = current_row[0], mouse_position[1] - self.gui_line_length / 2, current_row[2], current_row[3]
+                new_row = current_row[0], mouse_position[1] - self.gui.translation_line_length / 2, current_row[2], current_row[3]
                 self.chosen_point[2].points.set_row(self.chosen_point[3], new_row)
                 self.chosen_point[2].project(self.engine.projection_type, self.engine.projection_anchor)
-                translation_lines = GUILines(self.chosen_point[2].projected.access_row(self.chosen_point[3]), self.gui_line_length)
+                translation_lines = GUILines(self.chosen_point[2].projected.access_row(self.chosen_point[3]), self.gui.translation_line_length)
                 self.engine.set_translation_lines(translation_lines)
 
-            self.input_boxes = CoordinateInput(self.chosen_point[2].projected.access_row(self.chosen_point[3])[0], self.chosen_point[2].projected.access_row(self.chosen_point[3])[1])
+            self.input_boxes = CoordinateInput(*self.chosen_point[2].projected.access_row(self.chosen_point[3])[:3], self.chosen_point, self.engine, self.viewer)
+
+    def check_rotation_anchor(self, mouse_position):
+        if len(self.engine.rendered_translation_lines) > 0 and self.translating and self.chosen_point == None:
+            if self.check_object_radius(self.engine.rendered_translation_lines[0], mouse_position) and self.translating_x == False and self.translating_y == False:
+                self.translating_x = True
+                self.translating_y = False
+                self.use_custom_rotation_anchor = True
+            if self.check_object_radius(self.engine.rendered_translation_lines[1], mouse_position) and self.translating_y == False and self.translating_x == False:
+                self.translating_y = True
+                self.translating_x = False
+                self.use_custom_rotation_anchor = True
+
+            if self.translating_x:
+                current_row = self.rotation_anchor
+                # New row z rotation has to still use centre of objects z position since only x and y can be specified by the translation lines
+                new_row = mouse_position[0] - self.gui.translation_line_length / 2, current_row[1], self.engine.entities_centre(self.engine.objects)[2], 0
+                self.rotation_anchor = new_row
+                translation_lines = GUILines(self.rotation_anchor, self.gui.translation_line_length)
+                self.engine.set_translation_lines(translation_lines)
+
+            if self.translating_y:
+                current_row = self.rotation_anchor
+                new_row = current_row[0], mouse_position[1] - self.gui.translation_line_length / 2, self.engine.entities_centre(self.engine.objects)[2], 0
+                self.rotation_anchor = new_row
+                translation_lines = GUILines(self.rotation_anchor, self.gui.translation_line_length)
+                self.engine.set_translation_lines(translation_lines)
+
+            self.responsive_text = ResponsiveText(*self.rotation_anchor[:2], 'Rotation Anchor')
 
     def text_boxes_accepting_input(self):
         accepting_input = False
@@ -215,7 +259,8 @@ class EngineClient():
                     if self.display_surfaces:
                         for surface in object_3d.order_surfaces():
                             surface_points = object_3d.find_points(surface)
-                            pygame.draw.polygon(self.viewer, object_3d.map_colour(surface, self.lighting_factor), surface_points)
+                            if len(surface) > 2:
+                                pygame.draw.polygon(self.viewer, object_3d.map_colour(surface, self.lighting_factor), surface_points)
 
                     if self.hidden_lines == False:
                         if self.display_lines:
@@ -252,27 +297,39 @@ class EngineClient():
             self.viewer.blit(fps, (10, 10))
             view = self.font.render('ORTHOGRAPHIC VIEW', True, self.fps_colour)
             self.viewer.blit(view, (self.gui.viewer_width - 200, 10))
-        
+
         if self.display_logo:
             self.viewer.blit(self.logo, (self.gui.viewer_width - self.logo_size[0], self.gui.viewer_height - self.logo_size[1]))
 
-        if self.engine.get_translation_lines() != None:
-            if self.engine.get_translation_lines().check_render_distance(self.max_render_distance, self.min_render_distance):
-                if self.engine.get_translation_lines().is_visible(self.gui.viewer_width, self.gui.viewer_height):
-                    self.render_translation_lines()
-                    self.render_input_boxes()
+        if self.engine.get_translation_lines() != None and not self.engine.performing_operations() and self.engine.acceptable_operation_period():
+            if self.engine.get_translation_lines().is_visible(self.gui.viewer_width, self.gui.viewer_height):
+                self.update_translation_system()
+                self.render_translation_lines()
+                self.render_input_boxes_and_text()
+
+    def update_translation_system(self):
+        if self.chosen_point != None:
+            self.chosen_point[2].points.set_row(self.chosen_point[3], self.chosen_point[2].points.access_row(self.chosen_point[3]))
+            self.chosen_point[2].project(self.engine.projection_type, self.engine.projection_anchor)
+            translation_lines = GUILines(self.chosen_point[2].projected.access_row(self.chosen_point[3]), self.gui.translation_line_length)
+            self.engine.set_translation_lines(translation_lines)
+            self.input_boxes.reposition_boxes(*self.chosen_point[2].projected.access_row(self.chosen_point[3])[:2])
 
     def render_translation_lines(self):
         translation_lines = self.engine.get_translation_lines()
-        x_line = pygame.draw.line(self.viewer, self.gui.gui_translation_lines_colour_x, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(1)[:2]), self.gui_line_width)
-        y_line = pygame.draw.line(self.viewer, self.gui.gui_translation_lines_colour_y, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(2)[:2]), self.gui_line_width)
+        x_line = pygame.draw.line(self.viewer, self.gui.gui_translation_lines_colour_x, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(1)[:2]), self.gui.translation_line_width)
+        y_line = pygame.draw.line(self.viewer, self.gui.gui_translation_lines_colour_y, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(2)[:2]), self.gui.translation_line_width)
         rendered_point = pygame.draw.circle(self.viewer, self.point_colour, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), self.point_radius, 0)
         self.engine.rendered_translation_lines = [x_line, y_line]
 
-    def render_input_boxes(self):
-        for input_box in self.input_boxes.access_input_boxes():
-            input_box.resize()
-            input_box.draw(self.viewer)
+    def render_input_boxes_and_text(self):
+        if self.input_boxes != None:
+            for input_box in self.input_boxes.access_input_boxes():
+                input_box.resize()
+                input_box.draw(self.viewer)
+                
+        if self.responsive_text != None:
+            self.responsive_text.draw(self.viewer)
 
     def render_relative_lines(self, object_3d):
        for direction in object_3d.viewer_relativity(self.gui.viewer_width, self.gui.viewer_height):
@@ -285,4 +342,11 @@ class EngineClient():
             if direction == 'S':
                 pygame.draw.line(self.viewer, self.relative_line_colour, (0,self.gui.viewer_height), (self.gui.viewer_width,self.gui.viewer_height), 5)
 
-display = EngineClient(1600, 900)
+def initialise(width, height):
+    login_sys = Launcher(800, 400)
+    if not login_sys.launcher_closed():
+        display = EngineClient(width, height, login_sys)
+        display.run()
+
+if __name__ == '__main__':
+    initialise(1600, 900)

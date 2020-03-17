@@ -1,9 +1,14 @@
+import time
+
 import matrix_math
 
 class Engine3D:
     def __init__(self, projection_type = 'orthographic', projection_anchor = (0, 0, 0, 0)):
         self.objects = {}
         self.translation_lines = None
+        self._performing_operations = False
+        self._last_operation_time = time.time()
+        self.operation_delay = 0.4 # The minimum time between operations allowed to show the translation lines in seconds
 
         self.rendered_translation_lines = []
         self.rendered_points = [[]]
@@ -20,6 +25,8 @@ class Engine3D:
         translation_lines.projected = translation_lines.points
 
     def translate(self, dx, dy, dz, entities = None):
+        self._performing_operations = True
+        self._last_operation_time = time.time()
         if entities == None:
             for object_3d in self.objects.values():
                 object_3d.translate((dx, dy, dz))
@@ -28,11 +35,10 @@ class Engine3D:
             for object_3d in entities:
                 self.objects[object_3d].translate((dx, dy, dz))
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
-        if self.translation_lines != None:
-            self.translation_lines.translate((dx, dy, dz))
-            self.translation_lines.projected = self.translation_lines.points
 
     def scale(self, kx, ky, kz, anchor = None, entities = None):
+        self._performing_operations = True
+        self._last_operation_time = time.time()
         if anchor == None:
             anchor = self.entities_centre()
 
@@ -44,11 +50,10 @@ class Engine3D:
             for object_3d in entities:
                 self.objects[object_3d].scale((kx, ky, kz), anchor)
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
-        if self.translation_lines != None:
-            self.translation_lines.scale((kx, ky, kz), anchor)
-            self.translation_lines.projected = self.translation_lines.points
 
     def rotate(self, rx, ry, rz, anchor = None, entities = None):
+        self._performing_operations = True
+        self._last_operation_time = time.time()
         if anchor == None:
             anchor = self.entities_centre()
 
@@ -57,13 +62,9 @@ class Engine3D:
                 object_3d.rotate((rx, ry, rz), anchor)
                 object_3d.project(self.projection_type, self.projection_anchor)
         else:
-            anchor = self.entities_centre(entities)
             for object_3d in entities:
                 self.objects[object_3d].rotate((rx, ry, rz), anchor)
                 self.objects[object_3d].project(self.projection_type, self.projection_anchor)
-        if self.translation_lines != None:
-            self.translation_lines.rotate((rx, ry, rz), anchor)
-            self.translation_lines.projected = self.translation_lines.points
     
     def entities_centre(self, entities = None):
         centre = (0, 0, 0, 0)
@@ -75,23 +76,37 @@ class Engine3D:
             total_x += self.objects[object_3d].sum_x()
             total_y += self.objects[object_3d].sum_y()
             total_z += self.objects[object_3d].sum_z()
-            no_points += self.objects[object_3d].no_points()
+            no_points += self.objects[object_3d].point_count()
         if no_points > 0:
            centre = (total_x / no_points, total_y / no_points, total_z / no_points, 0)
         return centre
 
     def order_objects(self):
-        for i in range(len(self.objects)):
-            current = self.objects[list(self.objects.keys())[i]]
+        ordered_objects = self.objects.copy()
+        for i in range(len(ordered_objects)):
+            current = ordered_objects[list(ordered_objects.keys())[i]]
             index = i
-            while index > 0 and self.objects[list(self.objects.keys())[index-1]].find_centre()[2] > current.find_centre()[2]:
-                self.objects[list(self.objects.keys())[index]] = self.objects[list(self.objects.keys())[index - 1]]
+            while index > 0 and ordered_objects[list(ordered_objects.keys())[index-1]].find_centre()[2] > current.find_centre()[2]:
+                ordered_objects[list(ordered_objects.keys())[index]] = ordered_objects[list(ordered_objects.keys())[index - 1]]
                 index -= 1
-            self.objects[list(self.objects.keys())[index]] = current
-        return self.objects
+            ordered_objects[list(ordered_objects.keys())[index]] = current
+        return ordered_objects
 
     def clear_all_objects(self):
         self.objects = {}
+        self.clear_translation_lines()
+        self.clear_rendered_points()
+
+    def remove_object(self, object_name, engine_client):
+        if engine_client.chosen_point != None:
+            if engine_client.chosen_point[2].points.access_row(engine_client.chosen_point[3]) in self.objects[object_name].points.access_matrix():
+                self.clear_translation_lines()
+                self.clear_rendered_points()
+        if engine_client.chosen_rotation_anchor != None:
+            if len(self.objects) == 1: # If the object being deleted is the last object then remove the rotation point
+                self.clear_translation_lines()
+                self.clear_rendered_points()
+        del self.objects[object_name]
 
     def clear_rendered_points(self):
         self.rendered_points = []
@@ -101,3 +116,12 @@ class Engine3D:
     
     def get_translation_lines(self):
         return self.translation_lines
+
+    def performing_operations(self):
+        return self._performing_operations
+
+    def update_operating_status(self, status):
+        self._performing_operations = status
+
+    def acceptable_operation_period(self):
+        return True if time.time() - self._last_operation_time > self.operation_delay else False

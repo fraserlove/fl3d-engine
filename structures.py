@@ -67,14 +67,14 @@ class Matrix():
         return self.matrix
     
 class Object3D():
-    def __init__(self, name, colour):
+    def __init__(self, name, colour, position = None, _type = None):
         self.name = name
+        self.type = _type
+        self.position = position
         self.points = Matrix(0, 0)
         self.projected = Matrix(0, 0)
         self.surfaces = []
         self.lines = []
-
-        self.centre = (0, 0, 0, 0)
 
         self.colour = colour
 
@@ -119,14 +119,14 @@ class Object3D():
         return int(data_handling.map(-(self.surface_mean_y(surface) - self.find_centre()[1]), data_handling.div_non_zero(- self.surface_mean_y(surface), lighting_factor), data_handling.div_non_zero(self.surface_mean_y(surface), lighting_factor), 0, 255))
 
     def map_colour(self, surface, lighting_factor):
-        colours = {'red': (0, self.hue(surface, lighting_factor), self.hue(surface, lighting_factor)), 'magenta': (0, self.hue(surface, lighting_factor), 0), 'green': (self.hue(surface, lighting_factor), 255, self.hue(surface, lighting_factor)),
+        colours = {'red': (255, self.hue(surface, lighting_factor), self.hue(surface, lighting_factor)), 'magenta': (255, self.hue(surface, lighting_factor), 255), 'green': (self.hue(surface, lighting_factor), 255, self.hue(surface, lighting_factor)),
                    'blue': (self.hue(surface, lighting_factor), self.hue(surface, lighting_factor), 255), 'yellow': (255, 255, self.hue(surface, lighting_factor)), 'cyan': (self.hue(surface, lighting_factor), 255, 255),
                    'grey': (self.hue(surface, lighting_factor), self.hue(surface, lighting_factor), self.hue(surface, lighting_factor))
                     }
         if self.colour in colours:
             return colours[self.colour]
         else:
-            print ('ERROR: Choose a colour from: \'red\', \'green\', \'blue\', \'purple\', \'yellow\', \'orange\', \'grey\'')
+            print ('ERROR: Choose a colour from: \'red\', \'magenta\', \'green\', \'blue\', \'yellow\', \'cyan\', \'grey\'')
 
     def viewer_relativity(self, viewer_width, viewer_height):
         """ Returns an array of the directions to which the object is off the screen """
@@ -227,3 +227,21 @@ class Object3D():
         self._rotate_x(anchor, rx)
         self._rotate_y(anchor, ry)
         self._rotate_z(anchor, rz)
+
+    def get_type(self):
+        return self.type
+
+    def get_colour(self):
+        return self.colour
+
+    def get_position(self):
+        return self.position
+
+    def point_count(self):
+        return len(self.points)
+
+    def line_count(self):
+        return len(self.lines)
+    
+    def surface_count(self):
+        return len(self.surfaces)

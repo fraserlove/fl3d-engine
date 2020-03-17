@@ -1,4 +1,6 @@
-import tkinter, os, time, pygame
+import tkinter, os, time
+os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
+import pygame
 from PIL import Image, ImageTk
 import matplotlib.pyplot as plt
 import matplotlib
@@ -7,13 +9,17 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from ctypes import windll
 
 import data_handling
+from shapes import Cube, Quad, Plane, Polygon, Sphere, Line2D, Line3D
 
 class GUI():
-    def __init__(self, engine_client, width, height):
+    def __init__(self, engine_client, db_manager, width, height):
 
         self.engine_client = engine_client
-        
+        self.db_manager = db_manager
+
         self.gui_width, self.gui_height = width, height
+        os_user = windll.user32
+        self.x_off, self.y_off = os_user.GetSystemMetrics(0), os_user.GetSystemMetrics(1)
 
         self.top_bar_width, self.top_bar_height = self.gui_width, 25
         self.control_width, self.control_height = 250, self.gui_height - self.top_bar_height
@@ -22,19 +28,27 @@ class GUI():
         self.viewer_width, self.viewer_height = self.gui_width - self.control_width, self.gui_height - self.details_height - self.top_bar_height
         self.fps_graph_height = self.details_height
 
+        self.properties_window_width, self.properties_window_height = 200, 500
+
         self.viewer_centre = (self.viewer_width / 2, self.viewer_height / 2, 0, 0)
 
         self.root = tkinter.Tk()
         self.root.withdraw()
         self.root.resizable(False, False)
         self.window = FloatingWindow(self.root)
-        self.window.geometry("{}x{}+{}+{}".format(self.gui_width, self.gui_height, 200, 200))
+        self.window.geometry("{}x{}+{}+{}".format(self.gui_width, self.gui_height, int((self.x_off - self.gui_width) / 2), int((self.y_off - self.gui_height) / 2)))
         self.window.overrideredirect(True)
         self.window.title('FL3D Engine')
         self.window.iconbitmap('ICON.ico')
 
-        self.gui_header_padding = 10
-        self.gui_separator_padding = 50
+        self.gui_controls_header_padding = 10
+        self.gui_controls_separator_padding = 50
+        self.gui_info_separator_padding = 750
+        self.gui_world_space_padding = 100
+        self.gui_add_object_padding = 300
+        self.add_object_dimensions = (20, 8)
+        self.world_space_dimensions = (25, 8)
+        self.world_objects_list_box_height = 130
         self.separator_dimensions = (100, 1)
         self.gui_label_padding = (25, 70)
         self.gui_slider_padding = (140, 1)
@@ -48,6 +62,18 @@ class GUI():
         self.gui_min_label_padding = 15
         self.gui_one_line_label_padding = 16
         self.gui_one_line_value_padding = 32
+        self.gui_username_label_offset = 755
+        self.gui_info_header_padding = 710
+        self.gui_info_label_padding = (20, 20)
+        self.add_object_button_x_offset = 213
+        self.object_details_bg_padding = (120, 10)
+        self.object_details_bg_size_x = 250
+
+        self.translation_line_length = int(self.viewer_width / 50)
+        self.translation_line_width = int(self.viewer_height / 100)
+
+        self.previous_selected = None
+        self.menu_open = False
 
         self.gui_bg_colour = '#171717'
         self.gui_highlight_bg_colour = '#2b2b2b'
@@ -57,6 +83,8 @@ class GUI():
         self.gui_hover_fg_colour = '#b44df0'
         self.gui_window_title_colour = '#ababab'
         self.gui_header_colour = '#ffffff'
+        self.gui_embeded_colour = '#333333'
+        self.gui_small_button_colour = '#232323'
         self.gui_translation_lines_colour_x = (233, 118, 16)
         self.gui_translation_lines_colour_y = (144, 33, 255)
 
@@ -72,6 +100,9 @@ class GUI():
         self.gui_label_font = ('Montserrat Regular', '10')
         self.gui_button_font = ('Montserrat Medium', '10')
         self.gui_window_title_font = ('Montserrat Medium', '10')
+        self.gui_list_box_font = ('Montserrat Regular', '8')
+        self.gui_small_button_font = ('Montserrat Regular', '7')
+        self.gui_large_label_font = ('Montserrat Regular', '14')
 
         self.top_bar = tkinter.Frame(self.window, bg = self.gui_bg_colour, width = self.top_bar_width, height = self.top_bar_height)
         self.top_bar.pack(side = 'top')
@@ -126,37 +157,39 @@ class GUI():
         self.root.quit()
         plt.close()
 
-    def hover_enter_exit_buttom(self, event):
+    def hover_enter_exit_button(self, event):
         self.exit_button['bg'] = self.gui_hover_bg_colour
 
-    def hover_leave_exit_buttom(self, event):
+    def hover_leave_exit_button(self, event):
         self.exit_button['bg'] = self.gui_bg_colour
 
-    def hover_enter_close_buttom(self, event):
+    def hover_enter_close_button(self, event):
         self.close_button['bg'] = self.gui_hover_bg_colour
 
-    def hover_leave_close_buttom(self, event):
+    def hover_leave_close_button(self, event):
         self.close_button['bg'] = self.gui_bg_colour
 
-    def hover_enter_import_buttom(self, event):
+    def hover_enter_import_button(self, event):
         self.import_objects_button['bg'] = self.gui_hover_fg_colour
 
-    def hover_leave_import_buttom(self, event):
+    def hover_leave_import_button(self, event):
         self.import_objects_button['bg'] = self.gui_fg_colour
 
-    def hover_enter_clear_buttom(self, event):
+    def hover_enter_clear_button(self, event):
         self.clear_worldspace_button['bg'] = self.gui_hover_fg_colour
 
-    def hover_leave_clear_buttom(self, event):
+    def hover_leave_clear_button(self, event):
         self.clear_worldspace_button['bg'] = self.gui_fg_colour
 
     def construct_top_bar(self):
 
         self.gui_top_bar_button_padding = 10
 
-        self.exit_img = ImageTk.PhotoImage(file = 'EXIT.png')
+        self.exit_img_raw = Image.open('EXIT.png')
+        self.exit_img = ImageTk.PhotoImage(self.exit_img_raw)
         self.exit_button = tkinter.Button(self.top_bar, text = "Exit", width = self.gui_exit_button_size[0], height = self.gui_exit_button_size[1], command = self.engine_client.close_window, borderwidth=0, bd = -2, bg = self.gui_bg_colour, activebackground=self.gui_highlight_bg_colour)
         self.exit_button.config(image = self.exit_img)
+        self.exit_button.image = self.exit_img
         self.exit_button.place(x = self.gui_width - self.gui_exit_button_size[0], y = -3, anchor = 'nw')
 
         self.close_img = ImageTk.PhotoImage(file = 'CLOSE.png')
@@ -168,26 +201,417 @@ class GUI():
         self.window_title.place(x = self.gui_width / 2, y = 0, anchor = 'n')
         self.window.create_grip(self.window_title)
 
-        self.exit_button.bind('<Enter>', self.hover_enter_exit_buttom)
-        self.exit_button.bind('<Leave>', self.hover_leave_exit_buttom)
-        self.close_button.bind('<Enter>', self.hover_enter_close_buttom)
-        self.close_button.bind('<Leave>', self.hover_leave_close_buttom)
+        self.exit_button.bind('<Enter>', self.hover_enter_exit_button)
+        self.exit_button.bind('<Leave>', self.hover_leave_exit_button)
+        self.close_button.bind('<Enter>', self.hover_enter_close_button)
+        self.close_button.bind('<Leave>', self.hover_leave_close_button)
 
     def construct_control_panel(self):
 
         controls_header = tkinter.Label(self.control, text='ENGINE SETTINGS', bg=self.gui_bg_colour, fg=self.gui_header_colour, font=self.gui_header_font)
-        controls_header.place(x = self.control_width / 2, y = self.gui_header_padding, anchor = 'n')
+        controls_header.place(x = self.control_width / 2, y = self.gui_controls_header_padding, anchor = 'n')
 
-        separator_canvas = tkinter.Canvas(self.control, width = self.separator_dimensions[0], height = self.separator_dimensions[1], bg = self.gui_bg_colour, bd = 0, highlightthickness=0)
-        separator_canvas.place(x = (self.control_width - self.separator_dimensions[0]) / 2, y = self.gui_separator_padding)
-        separator = separator_canvas.create_line(0, 0, self.separator_dimensions[0], 0, fill = self.gui_fg_colour)
+        controls_separator_canvas = tkinter.Canvas(self.control, width = self.separator_dimensions[0], height = self.separator_dimensions[1], bg = self.gui_bg_colour, bd = 0, highlightthickness=0)
+        controls_separator_canvas.place(x = (self.control_width - self.separator_dimensions[0]) / 2, y = self.gui_controls_separator_padding)
+        controls_separator = controls_separator_canvas.create_line(0, 0, self.separator_dimensions[0], 0, fill = self.gui_fg_colour)
+
+        info_header = tkinter.Label(self.control, text='USER INFO', bg=self.gui_bg_colour, fg=self.gui_header_colour, font=self.gui_header_font)
+        info_header.place(x = self.control_width / 2, y = self.gui_info_header_padding, anchor = 'n')
+
+        info_separator_canvas = tkinter.Canvas(self.control, width = self.separator_dimensions[0], height = self.separator_dimensions[1], bg = self.gui_bg_colour, bd = 0, highlightthickness=0)
+        info_separator_canvas.place(x = (self.control_width - self.separator_dimensions[0]) / 2, y = self.gui_info_separator_padding)
+        info_separator = info_separator_canvas.create_line(0, 0, self.separator_dimensions[0], 0, fill = self.gui_fg_colour)
 
         self.construct_binary_sliders()
         self.construct_buttons()
         self.construct_linear_sliders()
+        self.construct_info()
 
     def construct_details_panel(self):
-        pass
+        add_object_label = tkinter.Label(self.details, text='Add Object', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        add_object_label.place(x = self.details_width - self.gui_add_object_padding, y = 5, anchor = 'n')
+
+        objects = ['Line2D', 'Line3D', 'Cube', 'Quad', 'Plane', 'Polygon', 'Sphere']
+        self.add_object_lb = tkinter.Listbox(self.details, relief = 'flat', width = self.world_space_dimensions[0], height = self.world_space_dimensions[1], bg=self.gui_small_button_colour, bd=0, borderwidth=0, highlightthickness=0, fg = 'white', activestyle = 'none', selectbackground = self.gui_embeded_colour, font = self.gui_list_box_font)
+        for new_object in objects:
+            self.add_object_lb.insert(tkinter.END, new_object)
+        self.add_object_lb.place(x = self.details_width - self.gui_add_object_padding, y = 30, anchor = 'n', height = self.world_objects_list_box_height)
+        self.add_object_button = tkinter.Button(self.details, text="Add Object", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.open_add_object_window, font=self.gui_button_font)
+        self.add_object_button.place(x= self.details_width - self.add_object_button_x_offset, y = self.details_height - 10, anchor = 'se', height = 22)
+        self.add_object_lb.bind('<Double-Button-1>', self.check_if_selected_object)
+
+        world_space_label = tkinter.Label(self.details, text='World Space', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        world_space_label.place(x = self.details_width - self.gui_world_space_padding, y = 5, anchor = 'n')
+
+        self.world_objects_scrollbar = tkinter.Scrollbar(self.details, orient = tkinter.VERTICAL, width = 11)
+        self.world_objects_lb = tkinter.Listbox(self.details, yscrollcommand = self.world_objects_scrollbar.set, relief = 'flat', width = self.world_space_dimensions[0], height = self.world_space_dimensions[1], bg=self.gui_small_button_colour, bd=0, borderwidth=0, highlightthickness=0, fg = 'white', activestyle = 'none', selectbackground = self.gui_embeded_colour, font = self.gui_list_box_font)
+        self.world_objects_scrollbar.config(command = self.world_objects_lb.yview)
+        self.delete_world_object_button = tkinter.Button(self.details, text="Delete Object", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.delete_world_object, font=self.gui_button_font)
+        self.window.bind('<ButtonPress-1>', self.deselect_box)
+        self.delete_world_object_button.bind('<ButtonPress-1>', self.delete_world_object) # Extra binding needed otherwise button doenst run command as the deselect_box is ran first
+
+    def show_object_details(self):
+        active_object = self.world_objects_lb.get(tkinter.ACTIVE)
+        if active_object != '':
+
+            self.object_details = tkinter.Frame(self.details, width = self.object_details_bg_size_x, height = self.details_height - self.object_details_bg_padding[1] * 2, bd = 0, bg = self.gui_small_button_colour)
+            self.object_details.place(x = self.object_details_bg_padding[0], y = self.object_details_bg_padding[1], anchor = 'nw')
+
+            object_type = self.engine_client.engine.objects[active_object].get_type()
+            object_colour = self.engine_client.engine.objects[active_object].get_colour()
+            object_centre = '({:.0f}, {:.0f}, {:.0f})'.format(*self.engine_client.engine.objects[active_object].find_centre())
+            object_position = '({:.0f}, {:.0f}, {:.0f})'.format(*self.engine_client.engine.objects[active_object].get_position())
+            no_verts = str(self.engine_client.engine.objects[active_object].point_count())
+            no_edges = str(self.engine_client.engine.objects[active_object].line_count())
+            no_surfaces = str(self.engine_client.engine.objects[active_object].surface_count())
+
+            object_name_label = tkinter.Label(self.object_details, text = active_object, bg = self.gui_small_button_colour, fg=self.gui_header_colour, font=self.gui_large_label_font)
+            object_name_label.place(x = 5, y = -5, anchor = 'nw')
+
+            object_type_label = tkinter.Label(self.object_details, text = 'Instance of ' + object_type, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_type_label.place(x = 5, y = 21, anchor = 'nw', height = 15)
+
+            object_colour_label = tkinter.Label(self.object_details, text = 'Colour\t\t' + object_colour.capitalize(), bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_colour_label.place(x = 5, y = 42, anchor = 'nw', height = 15)
+
+            object_centre_label = tkinter.Label(self.object_details, text = 'Centre\t\t' + object_centre, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_centre_label.place(x = 5, y = 57, anchor = 'nw', height = 15)
+
+            object_position_label = tkinter.Label(self.object_details, text = 'Position\t\t' + object_position, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_position_label.place(x = 5, y = 72, anchor = 'nw', height = 15)
+
+            no_verts_label = tkinter.Label(self.object_details, text = 'Vertices\t\t' + no_verts, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            no_verts_label.place(x = 5, y = 87, anchor = 'nw', height = 15)
+
+            no_edges_label = tkinter.Label(self.object_details, text = 'Edges\t\t' + no_edges, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            no_edges_label.place(x = 5, y = 102, anchor = 'nw', height = 15)
+
+            no_surfaces_label = tkinter.Label(self.object_details, text = 'Surfaces\t\t' + no_surfaces, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            no_surfaces_label.place(x = 5, y = 117, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Line3D):
+                start_point = '({:.0f}, {:.0f}, {:.0f})'.format(*self.engine_client.engine.objects[active_object].get_start_point())
+                end_point = '({:.0f}, {:.0f}, {:.0f})'.format(*self.engine_client.engine.objects[active_object].get_end_point())
+
+                start_point_label = tkinter.Label(self.object_details, text = 'Start Point\t\t' + start_point, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                start_point_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+                end_point_label = tkinter.Label(self.object_details, text = 'End Point\t\t' + end_point, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                end_point_label.place(x = 5, y = 147, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Line2D):
+                angle = str(self.engine_client.engine.objects[active_object].get_angle())
+                magnitude = str(self.engine_client.engine.objects[active_object].get_magnitude())
+
+                angle_label = tkinter.Label(self.object_details, text = 'Angle (degrees)\t' + angle, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                angle_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+                magnitude_label = tkinter.Label(self.object_details, text = 'Magnitude\t' + magnitude, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                magnitude_label.place(x = 5, y = 147, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Sphere):
+                radius = str(self.engine_client.engine.objects[active_object].get_radius())
+                verts_res = str(self.engine_client.engine.objects[active_object].get_verts_res())
+
+                radius_label = tkinter.Label(self.object_details, text = 'Radius\t\t' + radius, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                radius_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+                verts_res_label = tkinter.Label(self.object_details, text = 'Vertices Resolution\t' + verts_res, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                verts_res_label.place(x = 5, y = 147, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Polygon):
+                no_points = str(self.engine_client.engine.objects[active_object].get_no_points())
+                size = str(self.engine_client.engine.objects[active_object].get_size())
+
+                no_points_label = tkinter.Label(self.object_details, text = 'Vertices\t\t' + no_points, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                no_points_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+                size_label = tkinter.Label(self.object_details, text = 'Size\t\t' + size, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                size_label.place(x = 5, y = 147, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Plane):
+                length = str(self.engine_client.engine.objects[active_object].get_length())
+                width = str(self.engine_client.engine.objects[active_object].get_width())
+
+                length_label = tkinter.Label(self.object_details, text = 'Length\t\t' + length, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                length_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+                width_label = tkinter.Label(self.object_details, text = 'Width\t\t' + width, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                width_label.place(x = 5, y = 147, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Quad):
+                length = str(self.engine_client.engine.objects[active_object].get_length())
+                width = str(self.engine_client.engine.objects[active_object].get_width())
+                height = str(self.engine_client.engine.objects[active_object].get_height())
+
+                length_label = tkinter.Label(self.object_details, text = 'Length\t\t' + length, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                length_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+                width_label = tkinter.Label(self.object_details, text = 'Width\t\t' + width, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                width_label.place(x = 5, y = 147, anchor = 'nw', height = 15)
+                height_label = tkinter.Label(self.object_details, text = 'Height\t\t' + height, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                height_label.place(x = 5, y = 162, anchor = 'nw', height = 15)
+
+            if isinstance(self.engine_client.engine.objects[active_object], Cube):
+                size = str(self.engine_client.engine.objects[active_object].get_size())
+
+                size_label = tkinter.Label(self.object_details, text = 'Size\t\t' + size, bg = self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+                size_label.place(x = 5, y = 132, anchor = 'nw', height = 15)
+
+
+    def delete_world_object(self, event = None):
+        self.engine_client.engine.remove_object(self.world_objects_lb.get(tkinter.ACTIVE), self.engine_client)
+        self.world_objects_lb.delete(tkinter.ACTIVE)
+
+    def deselect_box(self, event):
+        self.show_object_details()
+        if self.world_objects_lb.curselection() == self.previous_selected:
+            self.world_objects_lb.selection_clear(0, tkinter.END)
+        self.previous_selected = self.world_objects_lb.curselection()
+
+    def check_if_selected_object(self, event):
+        if self.selected_exists(self.add_object_lb):
+            self.open_add_object_window()
+
+    def menu_timeout(self):
+        self.object_colour.set('')
+        self.properties_window.update()
+
+    def open_menu(self, event):
+        if not self.menu_open:
+            self.object_colour_options['menu'].tk_popup(self.properties_window.winfo_x() + 8, self.properties_window.winfo_y() + 125)
+            self.menu_open = True
+        else:
+            self.menu_open = False
+
+    def close_menu(self, event):
+        self.menu_open = False
+
+    def open_add_object_window(self):
+        self.properties_window = FloatingWindow(self.root, bg = self.gui_bg_colour)
+        self.properties_window.geometry("{}x{}+{}+{}".format(self.properties_window_width, self.properties_window_height, int((self.x_off - self.properties_window_width) / 2), int((self.y_off - self.properties_window_height) / 2)))
+        self.properties_window.overrideredirect(True)
+        self.properties_window.attributes('-topmost', True)
+        self.properties_window.create_grip(self.properties_window)
+
+        properties_exit_button = tkinter.Button(self.properties_window, image = self.exit_img, width = self.gui_exit_button_size[0], height = self.gui_exit_button_size[1], command = self.properties_window.destroy, borderwidth=0, bd = -2, bg = self.gui_bg_colour, activebackground=self.gui_highlight_bg_colour)
+        properties_exit_button.place(x = self.properties_window_width - self.gui_exit_button_size[0], y = -3, anchor = 'nw')
+
+        object_type = self.add_object_lb.get(tkinter.ACTIVE)
+
+        properties_window_label = tkinter.Label(self.properties_window, text = object_type + ' Properties', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        properties_window_label.place(x = 5, y = 0, anchor = 'nw')
+
+        colours = ['red', 'magenta', 'green', 'blue', 'yellow', 'cyan', 'grey']
+
+        self.object_name = tkinter.StringVar(value = object_type)
+        self.object_colour = tkinter.StringVar(value = 'Select Colour')
+        self.position_x, self.position_y, self.position_z = tkinter.DoubleVar(), tkinter.DoubleVar(), tkinter.DoubleVar()
+
+        object_name_label = tkinter.Label(self.properties_window, text = 'Object Name', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        object_name_label.place(x = 5, y = 30, anchor = 'nw')
+        object_name_entry = tkinter.Entry(self.properties_window, textvariable = self.object_name, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+        object_name_entry.place(x = 8, y = 55, anchor = 'nw', height = 18, width = 182)
+
+        self.down_img_raw = Image.open('DOWN.png')
+        self.down_img = ImageTk.PhotoImage(self.down_img_raw)
+        object_colour_label = tkinter.Label(self.properties_window, text = 'Object Colour', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        object_colour_label.place(x = 5, y = 80, anchor = 'nw')
+        self.object_colour_options = tkinter.OptionMenu(self.properties_window, self.object_colour, *colours, command = self.close_menu)
+        self.object_colour_options.configure(indicatoron=0, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour, activebackground = self.gui_small_button_colour, activeforeground = self.gui_window_title_colour)
+        # Changes the styling of the dropdown menu by accessing the underlying menu object located at https://github.com/python/cpython/blob/master/Lib/tkinter/__init__.py
+        self.object_colour_options['menu'].config(bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, bd = 0)
+        self.object_colour_options.place(x = 8, y = 105, anchor = 'nw', height = 18, width = 155)
+        self.down_label = tkinter.Label(self.properties_window, image = self.down_img, width = 20, height = 20, borderwidth=0, bd = -2, bg = self.gui_bg_colour, activebackground=self.gui_highlight_bg_colour)
+        self.down_label.place(x = 170, y = 105, anchor = 'nw')
+        self.down_label.bind('<ButtonPress-1>', self.open_menu)
+        self.object_colour_options.bind('<ButtonPress-1>', self.open_menu)
+
+        object_position_label = tkinter.Label(self.properties_window, text = 'Position', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        object_position_label.place(x = 5, y = 130, anchor = 'nw')
+        object_x_label = tkinter.Label(self.properties_window, text = 'X', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        object_x_label.place(x = 5, y = 152, anchor = 'nw')
+        object_x_entry = tkinter.Entry(self.properties_window, textvariable = self.position_x, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+        object_x_entry.place(x = 20, y = 155, anchor = 'nw', height = 18, width = 45)
+
+        object_y_label = tkinter.Label(self.properties_window, text = 'Y', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        object_y_label.place(x = 67, y = 152, anchor = 'nw')
+        object_y_entry = tkinter.Entry(self.properties_window, textvariable = self.position_y, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+        object_y_entry.place(x = 82, y = 155, anchor = 'nw', height = 18, width = 45)
+
+        object_z_label = tkinter.Label(self.properties_window, text = 'Z', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        object_z_label.place(x = 130, y = 152, anchor = 'nw')
+        object_z_entry = tkinter.Entry(self.properties_window, textvariable = self.position_z, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+        object_z_entry.place(x = 145, y = 155, anchor = 'nw', height = 18, width = 45)
+
+        if object_type == 'Cube':
+            self.cube_size = tkinter.StringVar(value = 0)
+            cube_size_label = tkinter.Label(self.properties_window, text = 'Size', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            cube_size_label.place(x = 5, y = 180, anchor = 'nw')
+            cube_size_entry = tkinter.Entry(self.properties_window, textvariable = self.cube_size, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            cube_size_entry.place(x = 8, y = 205, anchor = 'nw', height = 18, width = 182)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_cube, font=self.gui_button_font)
+            create_button.place(x = 190, y = 235, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 270))
+
+        if object_type == 'Quad':
+            self.quad_size_x, self.quad_size_y, self.quad_size_z = tkinter.StringVar(value = 0), tkinter.StringVar(value = 0), tkinter.StringVar(value = 0)
+            quad_size_x_label = tkinter.Label(self.properties_window, text = 'Length', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            quad_size_x_label.place(x = 5, y = 180, anchor = 'nw')
+            quad_size_x_entry = tkinter.Entry(self.properties_window, textvariable = self.quad_size_x, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            quad_size_x_entry.place(x = 8, y = 205, anchor = 'nw', height = 18, width = 182)
+            quad_size_y_label = tkinter.Label(self.properties_window, text = 'Width', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            quad_size_y_label.place(x = 5, y = 230, anchor = 'nw')
+            quad_size_y_entry = tkinter.Entry(self.properties_window, textvariable = self.quad_size_y, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            quad_size_y_entry.place(x = 8, y = 255, anchor = 'nw', height = 18, width = 182)
+            quad_size_z_label = tkinter.Label(self.properties_window, text = 'Height', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            quad_size_z_label.place(x = 5, y = 280, anchor = 'nw')
+            quad_size_z_entry = tkinter.Entry(self.properties_window, textvariable = self.quad_size_z, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            quad_size_z_entry.place(x = 8, y = 305, anchor = 'nw', height = 18, width = 182)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_quad, font=self.gui_button_font)
+            create_button.place(x = 190, y = 335, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 370))
+
+        if object_type == 'Plane':
+            self.plane_size_x, self.plane_size_y = tkinter.StringVar(value = 0), tkinter.DoubleVar()
+            plane_size_x_label = tkinter.Label(self.properties_window, text = 'Length', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            plane_size_x_label.place(x = 5, y = 180, anchor = 'nw')
+            plane_size_x_entry = tkinter.Entry(self.properties_window, textvariable = self.plane_size_x, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            plane_size_x_entry.place(x = 8, y = 205, anchor = 'nw', height = 18, width = 182)
+            plane_size_y_label = tkinter.Label(self.properties_window, text = 'Width', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            plane_size_y_label.place(x = 5, y = 230, anchor = 'nw')
+            plane_size_y_entry = tkinter.Entry(self.properties_window, textvariable = self.plane_size_y, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            plane_size_y_entry.place(x = 8, y = 255, anchor = 'nw', height = 18, width = 182)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_plane, font=self.gui_button_font)
+            create_button.place(x = 190, y = 285, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 320))
+
+        if object_type == 'Polygon':
+            self.polygon_size, self.polygon_no_points = tkinter.StringVar(value = 0), tkinter.StringVar(value = 0)
+            polygon_size_label = tkinter.Label(self.properties_window, text = 'Size', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            polygon_size_label.place(x = 5, y = 180, anchor = 'nw')
+            polygon_size_entry = tkinter.Entry(self.properties_window, textvariable = self.polygon_size, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            polygon_size_entry.place(x = 8, y = 205, anchor = 'nw', height = 18, width = 182)
+
+            polygon_no_points_label = tkinter.Label(self.properties_window, text = 'Number of Vertices', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            polygon_no_points_label.place(x = 5, y = 230, anchor = 'nw')
+            polygon_no_points_entry = tkinter.Entry(self.properties_window, textvariable = self.polygon_no_points, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            polygon_no_points_entry.place(x = 8, y = 255, anchor = 'nw', height = 18, width = 182)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_polygon, font=self.gui_button_font)
+            create_button.place(x = 190, y = 285, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 320))
+
+        if object_type == 'Sphere':
+            self.sphere_size, self.sphere_no_points = tkinter.StringVar(value = 0), tkinter.StringVar(value = 0)
+            sphere_size_label = tkinter.Label(self.properties_window, text = 'Radius', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            sphere_size_label.place(x = 5, y = 180, anchor = 'nw')
+            sphere_size_entry = tkinter.Entry(self.properties_window, textvariable = self.sphere_size, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            sphere_size_entry.place(x = 8, y = 205, anchor = 'nw', height = 18, width = 182)
+
+            sphere_no_points_label = tkinter.Label(self.properties_window, text = 'Vertices Resolution', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            sphere_no_points_label.place(x = 5, y = 230, anchor = 'nw')
+            sphere_no_points_entry = tkinter.Entry(self.properties_window, textvariable = self.sphere_no_points, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            sphere_no_points_entry.place(x = 8, y = 255, anchor = 'nw', height = 18, width = 182)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_sphere, font=self.gui_button_font)
+            create_button.place(x = 190, y = 285, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 320))
+
+        if object_type == 'Line2D':
+            self.line2D_angle, self.line2D_magnitude = tkinter.DoubleVar(), tkinter.StringVar(value = 0)
+            line2D_angle_label = tkinter.Label(self.properties_window, text = 'Angle (degrees)', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            line2D_angle_label.place(x = 5, y = 180, anchor = 'nw')
+            line2D_angle_entry = tkinter.Entry(self.properties_window, textvariable = self.line2D_angle, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            line2D_angle_entry.place(x = 8, y = 205, anchor = 'nw', height = 18, width = 182)
+
+            line2D_magnitude_label = tkinter.Label(self.properties_window, text = 'Magnitude', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            line2D_magnitude_label.place(x = 5, y = 230, anchor = 'nw')
+            line2D_magnitude_entry = tkinter.Entry(self.properties_window, textvariable = self.line2D_magnitude, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            line2D_magnitude_entry.place(x = 8, y = 255, anchor = 'nw', height = 18, width = 182)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_line2D, font=self.gui_button_font)
+            create_button.place(x = 190, y = 285, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 320))
+
+        if object_type == 'Line3D':
+            self.position2_x, self.position2_y, self.position2_z = tkinter.DoubleVar(), tkinter.DoubleVar(), tkinter.DoubleVar()
+            object_position_label.config(text = 'First Point Position')
+
+            object_position2_label = tkinter.Label(self.properties_window, text = 'Second Point Position', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_position2_label.place(x = 5, y = 180, anchor = 'nw')
+            object_x_label = tkinter.Label(self.properties_window, text = 'X', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_x_label.place(x = 5, y = 202, anchor = 'nw')
+            object_x_entry = tkinter.Entry(self.properties_window, textvariable = self.position2_x, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            object_x_entry.place(x = 20, y = 205, anchor = 'nw', height = 18, width = 45)
+
+            object_y_label = tkinter.Label(self.properties_window, text = 'Y', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_y_label.place(x = 67, y = 202, anchor = 'nw')
+            object_y_entry = tkinter.Entry(self.properties_window, textvariable = self.position2_y, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            object_y_entry.place(x = 82, y = 205, anchor = 'nw', height = 18, width = 45)
+
+            object_z_label = tkinter.Label(self.properties_window, text = 'Z', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+            object_z_label.place(x = 130, y = 202, anchor = 'nw')
+            object_z_entry = tkinter.Entry(self.properties_window, textvariable = self.position2_z, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
+            object_z_entry.place(x = 145, y = 205, anchor = 'nw', height = 18, width = 45)
+
+            create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_line3D, font=self.gui_button_font)
+            create_button.place(x = 190, y = 235, anchor = 'ne', height = 22)
+            self.properties_window.geometry("{}x{}".format(self.properties_window_width, 270))
+
+    def create_cube(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        self.engine_client.engine.add_object(Cube(self.object_name.get(), position, int(self.cube_size.get()), self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def create_quad(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        self.engine_client.engine.add_object(Quad(self.object_name.get(), position, int(self.quad_size_x.get()), int(self.quad_size_y.get()), int(self.quad_size_z.get()), self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def create_plane(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        self.engine_client.engine.add_object(Plane(self.object_name.get(), position, int(self.plane_size_x.get()), int(self.plane_size_y.get()), self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def create_polygon(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        self.engine_client.engine.add_object(Polygon(self.object_name.get(), position, int(self.polygon_size.get()), int(self.polygon_no_points.get()), self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def create_sphere(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        self.engine_client.engine.add_object(Sphere(self.object_name.get(), position, int(self.sphere_size.get()), int(self.sphere_no_points.get()), self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def create_line2D(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        self.engine_client.engine.add_object(Line2D(self.object_name.get(), position, self.line2D_angle.get(), int(self.line2D_magnitude.get()), self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def create_line3D(self):
+        position = self.position_x.get(), self.position_y.get(), self.position_z.get()
+        positon2 = self.position2_x.get(), self.position2_y.get(), self.position2_z.get()
+        self.engine_client.engine.add_object(Line3D(self.object_name.get(), position, positon2, self.object_colour.get()))
+        self.properties_window.destroy()
+
+    def selected_exists(self, list_box):
+        selected = False
+        if len(list_box.curselection()) > 0:
+            selected = True
+        return selected
+
+    def update_world_objects(self):
+        object_names = self.engine_client.engine.objects.keys()
+        for i, object_name in enumerate(object_names):
+            if i >= self.world_objects_lb.size():
+                self.world_objects_lb.insert(tkinter.END, object_name)
+        self.world_objects_lb.place(x = self.details_width - self.gui_world_space_padding, y = 30, anchor = 'n', height = self.world_objects_list_box_height)
+        if self.world_objects_lb.size() > self.world_space_dimensions[1]:
+            self.world_objects_scrollbar.place(x = self.details_width - 7, y = 30, anchor = 'n', height = self.world_objects_list_box_height)
+
+        # If there are no more objects left in the world to delete or if an object has not been selected, remove delete_world_object_button from the tkinter window
+        if self.world_objects_lb.size() > 0 and self.selected_exists(self.world_objects_lb):  
+            self.delete_world_object_button.place(x= self.details_width - 13, y = self.details_height - 10, anchor = 'se', height = 22)
+        else:
+            self.delete_world_object_button.place_forget()
 
     def construct_fps_graph_labels(self):
         self.max_fps_label = tkinter.Label(self.details, text='Max FPS: {}'.format(0), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -200,43 +624,43 @@ class GUI():
     def construct_binary_sliders(self):
         display_surfaces_label = tkinter.Label(self.control, text='Display Surfaces', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         display_surfaces_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1], anchor = 'w')
-        display_surfaces_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_display_surfaces)
+        display_surfaces_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_display_surfaces)
         display_surfaces_slider.set(1)
         display_surfaces_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1], anchor = 'w')
 
         display_lines_label = tkinter.Label(self.control, text='Display Lines', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         display_lines_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset, anchor = 'w')
-        display_lines_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_display_lines)
+        display_lines_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_display_lines)
         display_lines_slider.set(1)
         display_lines_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset, anchor = 'w')
 
         display_points_label = tkinter.Label(self.control, text='Display Points', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         display_points_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 2, anchor = 'w')
-        display_points_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_display_points)
+        display_points_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_display_points)
         display_points_slider.set(1)
         display_points_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 2, anchor = 'w')
 
         debug_mode_label = tkinter.Label(self.control, text='Debug Mode', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         debug_mode_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 3, anchor = 'w')
-        debug_mode_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_debug_mode)
+        debug_mode_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_debug_mode)
         debug_mode_slider.set(1)
         debug_mode_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 3, anchor = 'w')
 
         hidden_lines_label = tkinter.Label(self.control, text='Show Hidden Lines', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         hidden_lines_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 4, anchor = 'w')
-        hidden_lines_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_hidden_lines)
+        hidden_lines_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_hidden_lines)
         hidden_lines_slider.set(1)
         hidden_lines_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 4, anchor = 'w')
 
         display_hud_label = tkinter.Label(self.control, text='Display HUD', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         display_hud_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 5, anchor = 'w')
-        display_hud_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_display_hud)
+        display_hud_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_display_hud)
         display_hud_slider.set(1)
         display_hud_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 5, anchor = 'w')
 
         display_logo_label = tkinter.Label(self.control, text='Display Logo', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         display_logo_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 6, anchor = 'w')
-        display_logo_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_display_logo)
+        display_logo_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=50, width=15, sliderlength=15, from_=0, to=1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_display_logo)
         display_logo_slider.set(1)
         display_logo_slider.place(x=self.gui_label_padding[0] + self.gui_slider_padding[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 6, anchor = 'w')
 
@@ -250,15 +674,15 @@ class GUI():
         self.clear_worldspace_button = tkinter.Button(self.control, text="Clear Worldspace", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 15, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.clear_worldspace, font=self.gui_button_font)
         self.clear_worldspace_button.place(x= self.control_width / 2, y = self.gui_button_padding[1] + self.gui_button_offset * 3, anchor = 'n')
 
-        self.import_objects_button.bind('<Enter>', self.hover_enter_import_buttom)
-        self.import_objects_button.bind('<Leave>', self.hover_leave_import_buttom)
-        self.clear_worldspace_button.bind('<Enter>', self.hover_enter_clear_buttom)
-        self.clear_worldspace_button.bind('<Leave>', self.hover_leave_clear_buttom)
+        self.import_objects_button.bind('<Enter>', self.hover_enter_import_button)
+        self.import_objects_button.bind('<Leave>', self.hover_leave_import_button)
+        self.clear_worldspace_button.bind('<Enter>', self.hover_enter_clear_button)
+        self.clear_worldspace_button.bind('<Leave>', self.hover_leave_clear_button)
 
     def construct_linear_sliders(self):
         rotation_factor_label = tkinter.Label(self.control, text='Rotation Factor', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         rotation_factor_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 13 - self.gui_one_line_label_padding, anchor = 'w')
-        self.rotation_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 100, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_rotation_factor)
+        self.rotation_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 100, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_rotation_factor)
         self.rotation_factor_slider.set(self.engine_client.rotation_factor * 100)
         self.rotation_factor_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 13, anchor = 'w')
         self.rotation_factor_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.rotation_factor_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -266,7 +690,7 @@ class GUI():
 
         scaling_factor_label = tkinter.Label(self.control, text='Scaling Factor', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         scaling_factor_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 14.5 - self.gui_one_line_label_padding, anchor = 'w')
-        self.scaling_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 101, to= 150, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_scaling_factor)
+        self.scaling_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 101, to= 150, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_scaling_factor)
         self.scaling_factor_slider.set(self.engine_client.scaling_factor * 100)
         self.scaling_factor_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 14.5, anchor = 'w')
         self.scaling_factor_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.scaling_factor_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -274,7 +698,7 @@ class GUI():
 
         translation_factor_label = tkinter.Label(self.control, text='Translation Factor', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         translation_factor_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 16 - self.gui_one_line_label_padding, anchor = 'w')
-        self.translation_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 100, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_translation_factor)
+        self.translation_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 100, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_translation_factor)
         self.translation_factor_slider.set(self.engine_client.translation_factor)
         self.translation_factor_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 16, anchor = 'w')
         self.translation_factor_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.translation_factor_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -282,7 +706,7 @@ class GUI():
 
         movement_factor_label = tkinter.Label(self.control, text='Movement Factor', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         movement_factor_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 17.5 - self.gui_one_line_label_padding, anchor = 'w')
-        self.movement_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 200, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_movement_factor)
+        self.movement_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 200, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_movement_factor)
         self.movement_factor_slider.set(self.engine_client.movement_factor)
         self.movement_factor_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 17.5, anchor = 'w')
         self.movement_factor_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.movement_factor_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -290,7 +714,7 @@ class GUI():
 
         max_frame_rate_label = tkinter.Label(self.control, text='Max Frame Rate', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         max_frame_rate_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 19 - self.gui_one_line_label_padding, anchor = 'w')
-        self.max_frame_rate_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 1000, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_max_frame_rate)
+        self.max_frame_rate_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 1000, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_max_frame_rate)
         self.max_frame_rate_slider.set(self.engine_client.max_frame_rate)
         self.max_frame_rate_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 19, anchor = 'w')
         self.max_frame_rate_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.max_frame_rate_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -298,7 +722,7 @@ class GUI():
 
         max_render_distance_label = tkinter.Label(self.control, text='Max Render Distance', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         max_render_distance_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 20.5 - self.gui_one_line_label_padding, anchor = 'w')
-        self.max_render_distance_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 0, to= 25, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_max_render_distance)
+        self.max_render_distance_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 0, to= 25, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_max_render_distance)
         self.max_render_distance_slider.set(self.engine_client.max_render_distance * 100)
         self.max_render_distance_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 20.5, anchor = 'w')
         self.max_render_distance_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.max_render_distance_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -306,7 +730,7 @@ class GUI():
 
         min_render_distance_label = tkinter.Label(self.control, text='Min Render Distance', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         min_render_distance_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 22 - self.gui_one_line_label_padding, anchor = 'w')
-        self.min_render_distance_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 100, to= 1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_min_render_distance)
+        self.min_render_distance_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 100, to= 1, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_min_render_distance)
         self.min_render_distance_slider.set(data_handling.div_non_zero(1, (self.engine_client.min_render_distance * 1000)))
         self.min_render_distance_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 22, anchor = 'w')
         self.min_render_distance_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.min_render_distance_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -314,7 +738,7 @@ class GUI():
 
         lighting_factor_label = tkinter.Label(self.control, text='Lighting Factor', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         lighting_factor_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 23.5 - self.gui_one_line_label_padding, anchor = 'w')
-        self.lighting_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 0, to= 250, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_lighting_factor)
+        self.lighting_factor_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 0, to= 250, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_lighting_factor)
         self.lighting_factor_slider.set(self.engine_client.lighting_factor * 100)
         self.lighting_factor_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 23.5, anchor = 'w')
         self.lighting_factor_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.lighting_factor_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
@@ -322,11 +746,40 @@ class GUI():
 
         point_radius_label = tkinter.Label(self.control, text='Point Radius', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         point_radius_label.place(x = self.gui_label_padding[0], y = self.gui_label_padding[1] + self.gui_slider_offset * 25 - self.gui_one_line_label_padding, anchor = 'w')
-        self.point_radius_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 10, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor="#333333", command = self.update_point_radius)
+        self.point_radius_slider = tkinter.Scale(self.control, orient=tkinter.HORIZONTAL, length=185, width=10, sliderlength=10, from_= 1, to= 10, bg=self.gui_fg_colour, bd=0, borderwidth=0, activebackground=self.gui_highlight_fg_colour, highlightthickness=0, sliderrelief="flat", showvalue=0, troughcolor=self.gui_embeded_colour, command = self.update_point_radius)
         self.point_radius_slider.set(self.engine_client.point_radius)
         self.point_radius_slider.place(x=self.gui_long_slider_offset[0], y = self.gui_label_padding[1] + self.gui_slider_padding[1] + self.gui_slider_offset * 25, anchor = 'w')
         self.point_radius_value = tkinter.Label(self.control, text='{0:.2f}'.format(self.point_radius_slider.get()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         self.point_radius_value.place(x = self.control_width - self.gui_one_line_value_padding, y = self.gui_label_padding[1] + self.gui_slider_offset * 25 - self.gui_one_line_label_padding, anchor = 'e')
+
+    def construct_info(self):
+        info_string = '\nTotal Logins: ' + str(self.db_manager.query_field('total_logins', 'username', self.engine_client.login_sys.get_username()))
+        username_label = tkinter.Label(self.control, text= 'User ID', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        username_label.place(x = 0 + self.gui_info_label_padding[0], y = self.gui_username_label_offset, anchor = 'nw')
+        username_value_label = tkinter.Label(self.control, text= str(self.engine_client.login_sys.get_username()), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        username_value_label.place(x = self.control_width - self.gui_info_label_padding[0], y = self.gui_username_label_offset, anchor = 'ne')
+
+        registered_label = tkinter.Label(self.control, text= 'Registered', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        registered_label.place(x = 0 + self.gui_info_label_padding[0], y = self.gui_username_label_offset + 1 * self.gui_info_label_padding[1], anchor = 'nw')
+        registered_value_label = tkinter.Label(self.control, text= self.db_manager.query_field('registered_time', 'username', self.engine_client.login_sys.get_username())[:-7], bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        registered_value_label.place(x = self.control_width - self.gui_info_label_padding[0], y = 1 * self.gui_username_label_offset + self.gui_info_label_padding[1], anchor = 'ne')
+
+        last_label = tkinter.Label(self.control, text= 'Last Login', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        last_label.place(x = 0 + self.gui_info_label_padding[0], y = self.gui_username_label_offset + 2 * self.gui_info_label_padding[1], anchor = 'nw')
+        last_value_label = tkinter.Label(self.control, text= self.check_if_previous_login(), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        last_value_label.place(x = self.control_width - self.gui_info_label_padding[0], y = self.gui_username_label_offset + 2 * self.gui_info_label_padding[1], anchor = 'ne')
+
+        total_logins_label = tkinter.Label(self.control, text= 'Total Logins', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        total_logins_label.place(x = 0 + self.gui_info_label_padding[0], y = self.gui_username_label_offset + 3 * self.gui_info_label_padding[1], anchor = 'nw')
+        total_logins_value_label = tkinter.Label(self.control, text= str(self.db_manager.query_field('total_logins', 'username', self.engine_client.login_sys.get_username())), bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
+        total_logins_value_label.place(x = self.control_width - self.gui_info_label_padding[0], y = self.gui_username_label_offset + 3 * self.gui_info_label_padding[1], anchor = 'ne')
+
+    def check_if_previous_login(self):
+        result = self.db_manager.query_field('login_time', 'username', self.engine_client.login_sys.get_username())
+        if result == None:
+            return 'No Previous Login'
+        else:
+            return result[:-7]
 
     def animate_fps_graph(self):
         fps_animation = animation.FuncAnimation(self.fps_viewer, self.update_fps_graph, interval = self.engine_client.fps_graph_interval)
@@ -406,6 +859,7 @@ class GUI():
 
     def clear_worldspace(self):
         self.engine_client.engine.clear_all_objects()
+        self.world_objects_lb.delete(0, tkinter.END)
 
     def update_rotation_factor(self, value):
         self.engine_client.rotation_factor = int(value) / 100
@@ -469,13 +923,16 @@ class FloatingWindow(tkinter.Toplevel):
         self.geometry("+{}+{}".format(x, y))
 
 class CoordinateInput:
-    def __init__(self, x, y, z):
+    def __init__(self, x, y, z, point, engine, viewer):
         self.input_boxes = []
         self.input_box_y_padding = 20
-        self.input_box_text = [str(x), str(y), str(z)]
+        self.input_box_text = [x, y, z]
+        self.axis = ['X', 'Y', 'Z']
+        self.engine = engine
+        self.viewer = viewer
 
         for i in range(3):
-            self.input_boxes.append(InputBox(x, y + self.input_box_y_padding * i, text = self.input_box_text[i]))
+            self.input_boxes.append(InputBox(x, y + self.input_box_y_padding * i, point, '{0:.2f}'.format(self.input_box_text[i]), self, i, self.axis[i]))
 
     def access_input_boxes(self):
         return self.input_boxes
@@ -487,22 +944,45 @@ class CoordinateInput:
                 user_input = True
         return user_input
 
+    def update_points(self, index):
+        for i, input_box in enumerate(self.input_boxes):
+            new_row = input_box.point[2].points.access_row(input_box.point[3])
+            new_row[i] = float(input_box.text)
+            input_box.point[2].points.set_row(input_box.point[3], new_row)
+            input_box.point[2].project(self.engine.projection_type, self.engine.projection_anchor)
+            input_box.text = str(new_row[i])
+
+    def reposition_boxes(self, x, y):
+        for i, input_box in enumerate(self.input_boxes):
+            input_box.reposition(x, y + self.input_box_y_padding * i)
+
 class InputBox:
-    def __init__(self, x, y, text=''):
+    def __init__(self, x, y, point, text, coordinate_input, index, axis):
         self.width, self.height = 30, 15
-        self.text_box_padding = (10, 10)
+        self.text_box_padding = (25, 9)
+        self.label_padding = (10, 10)
+        self.label_position = x + self.label_padding[0], y + self.label_padding[1]
         self.rect = pygame.Rect(x + self.text_box_padding[0], y + self.text_box_padding[1], self.width, self.height)
         self.text_box_active_colour = (144, 33, 255)
-        self.text_box_inactive_colour = (255, 255, 255)
+        self.text_box_inactive_colour = (128, 128, 128)
         self.text_box_text_colour = (255, 255, 255)
         self.input_speed = 10
         self.accepted_characters = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '.', ',', ' ')
         self.text_box_font = pygame.font.Font('fonts/Montserrat-Medium.ttf', 10)
+        self.label_font = pygame.font.Font('fonts/Montserrat-SemiBold.ttf', 10)
+        self.point = point
+        self.coordinate_input = coordinate_input
+        self.index = index
+        self.axis = axis
+        self.max_length = 7
 
-        self.color = self.text_box_inactive_colour
+        self.rect_colour = self.text_box_inactive_colour
+        self.text_colour = self.text_box_inactive_colour
         self.text = text
-        self.txt_surface = self.text_box_font.render(text, True, self.color)
+        self.txt_surface = self.text_box_font.render(text, True, self.rect_colour)
         self.active = False
+
+        self.label = self.label_font.render(self.axis, True, self.text_colour)
 
     def handle_event(self, event, movement_factor):
         if event.type == pygame.MOUSEBUTTONDOWN:
@@ -510,34 +990,59 @@ class InputBox:
             if self.rect.collidepoint(event.pos):
                 # Toggle the active variable.
                 #self.active = not self.active
-                self.active = True
+                self.active = not self.active
             else:
                 self.active = False
-            # Change the current color of the input box.
-            self.color = self.text_box_active_colour if self.active else self.text_box_inactive_colour
+            self.rect_colour = self.text_box_active_colour if self.active else self.text_box_inactive_colour
+            self.text_colour = self.text_box_text_colour if self.active else self.text_box_inactive_colour
+
+            self.txt_surface = self.text_box_font.render(self.text, True, self.text_colour)
+            self.label = self.label_font.render(self.axis, True, self.text_colour)
 
         if event.type == pygame.KEYDOWN:
             if self.active:
                 pygame.key.set_repeat(1, self.input_speed)
                 if event.key == pygame.K_RETURN:
-                    print(self.text)
-                    self.text = ''
+                    self.coordinate_input.update_points(self.index)
                 elif event.key == pygame.K_BACKSPACE:
                     self.text = self.text[:-1]
                 else:
-                    if event.unicode in self.accepted_characters:
+                    if event.unicode in self.accepted_characters and len(self.text) < self.max_length:
                         self.text += event.unicode
                 # Re-render the text.
-                self.txt_surface = self.text_box_font.render(self.text, True, self.text_box_text_colour)
+                self.txt_surface = self.text_box_font.render(self.text, True, self.text_colour)
+                self.label = self.label_font.render(self.axis, True, self.text_colour)
                 pygame.key.set_repeat(1, movement_factor)
 
     def draw(self, screen):
         # Blit the text.
-        screen.blit(self.txt_surface, (self.rect.x + 1, self.rect.y + 1))
+        screen.blit(self.txt_surface, (self.rect.x + 3, self.rect.y + 1))
+        screen.blit(self.label, self.label_position)
         # Blit the rect.
-        pygame.draw.rect(screen, self.color, self.rect, 1)
+        pygame.draw.rect(screen, self.rect_colour, self.rect, 1)
 
     def resize(self):
         # Resize the box if the text is too long.
-        width = max(self.width, self.txt_surface.get_width()+10)
+        width = max(self.width, self.txt_surface.get_width() + 8)
         self.rect.w = width
+
+    def reposition(self, x, y):
+        self.rect = pygame.Rect(x + self.text_box_padding[0], y + self.text_box_padding[1], self.width, self.height)
+        self.label_position = x + self.label_padding[0], y + self.label_padding[1]
+
+class ResponsiveText:
+    def __init__(self, x, y, text):
+        self.width, self.height = 30, 15
+        self.label_padding = (10, 10)
+        self.label_position = x + self.label_padding[0], y + self.label_padding[1]
+        self.text_colour = (255, 255, 255)
+        self.label_font = pygame.font.Font('fonts/Montserrat-SemiBold.ttf', 10)
+        self.label = self.label_font.render(text, True, self.text_colour)
+
+    def draw(self, screen):
+        # Blit the text.
+        screen.blit(self.label, self.label_position)
+        # Blit the rect.
+
+    def reposition(self, x, y):
+        self.label_position = x + self.label_padding[0], y + self.label_padding[1]
