@@ -67,7 +67,7 @@ class Matrix():
         return self.matrix
     
 class Object3D():
-    def __init__(self, name, colour, position = None, _type = None):
+    def __init__(self, name, colour, position = None, _type = None, is_2d = False):
         self.name = name
         self.type = _type
         self.position = position
@@ -75,13 +75,8 @@ class Object3D():
         self.projected = Matrix(0, 0)
         self.surfaces = []
         self.lines = []
+        self.is_2d = is_2d
 
-        self.colour = colour
-
-    def set_name(self, name):
-        self.name = name
-    
-    def set_surface_colour(self, colour):
         self.colour = colour
 
     def surface_mean_y(self, surface):
@@ -143,10 +138,13 @@ class Object3D():
         return directions
 
     def check_render_distance(self, max_render_distance, min_render_distance):
-        if self.find_centre()[2] < data_handling.div_non_zero(1, max_render_distance) or self.find_centre()[2] > data_handling.div_non_zero(1, min_render_distance):
-            return False
-        else:
-            return True
+        # If the shape is 2D, automatically return true
+        render = False
+        if self.is_2d:
+            render = True
+        if abs(self.find_centre()[2]) < data_handling.div_non_zero(1, max_render_distance) or abs(self.find_centre()[2]) < data_handling.div_non_zero(1, min_render_distance):
+            render = True
+        return render
 
     def is_visible(self, viewer_width, viewer_height):
         return True if (len(self.viewer_relativity(viewer_width, viewer_height)) == 0) else False
@@ -234,6 +232,9 @@ class Object3D():
     def get_colour(self):
         return self.colour
 
+    def get_name(self):
+        return self.name
+
     def get_position(self):
         return self.position
 
@@ -245,3 +246,29 @@ class Object3D():
     
     def surface_count(self):
         return len(self.surfaces)
+
+    def update_position(self):
+        self.position = self.points.access_row(0)[:3]
+
+    def set_position(self, position):
+        self.position = position
+        current_position = self.points.access_row(0)
+        # d_vector is a vector to calculate and store the difference between the new and current first points, which can then be applied to the whole points matrix
+        self.d_vector = current_position[0] - position[0], current_position[1] - position[1], current_position[2] - position[2], current_position[3]
+        self.projected = self.points = matrix_math.add_vector(self.points, matrix_math.inverse_vector(self.d_vector))
+
+    def set_name(self, name):
+        self.name = name
+    
+    def set_colour(self, colour):
+        self.colour = colour
+
+    def clear_object_data(self):
+        self.points, self.projected = Matrix(0, 0), Matrix(0, 0)
+        self.surfaces, self.lines = [], []
+
+    def get_surfaces(self):
+        return self.surfaces
+
+    def get_points(self):
+        return self.points.matrix

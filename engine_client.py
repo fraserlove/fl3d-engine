@@ -3,26 +3,12 @@ os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
 from engine_3d import Engine3D
-from shapes import Cube, Quad, Plane, Polygon, Sphere, GUILines
+from shapes import GUILines
 from database_manager import DatabaseManager
 from camera import Camera
 from gui import GUI, CoordinateInput, ResponsiveText
 from launcher import Launcher
 import data_handling
-
-""" For rotation of all objects use self.viewer_centre to spin all objects """
-""" For individual rotation of one ore multiple objects use objects = [] in engine.rotate() with array of object lables """
-""" For combined spin over multiple objects use objects = [] in engine.rotate() with array of object lables """
-
-''' Update db when loading objects to include new variables '''
-''' Help screen '''
-''' Reset fps graph and anchor to objects centre'''
-''' Add ability to edit object using same gui as to create '''
-''' Add ability to copy objects '''
-''' Add ability to rename objects '''
-''' Add object outliner '''
-''' Add ability to set position to centre of screen when creating an object '''
-""" Include ability to save user settings """
 
 class EngineClient():
     def __init__(self, width, height, login_sys):
@@ -32,27 +18,8 @@ class EngineClient():
         self.bg_colour = (35, 35, 35)
         self.fps_colour = (255, 255, 255)
         self.relative_line_colour = (118, 18, 219)
-        self.point_radius = 2
-        self.lighting_factor = 1.25 # Controls the contrast of colour in objects, higher means more contrast
-        self.rotation_factor = 0.1
-        self.translation_factor = 25
-        self.scaling_factor = 1.1
-        self.movement_factor = 25
-        self.max_frame_rate = 1000
-        self.max_render_distance = 0
-        self.min_render_distance = 1 / 10000
 
         self.displacement_arrows = 0
-
-        self.display_surfaces = True
-        self.display_points = False
-        self.display_lines = False
-        self.debug_mode = False
-        self.hidden_lines = False #  Display lines within overlapping objects
-        self.display_hud = True
-        self.display_logo = True
-        self.import_objects = False 
-        self.create_objects = True
         
         self.fps_array, self.time_array = [], []
         self.fps_array_max_length = 500
@@ -68,9 +35,17 @@ class EngineClient():
         self.use_custom_rotation_anchor = False
         self.running = True
 
-        self.camera = Camera(self)
         self.login_sys = login_sys
         self.db_manager = DatabaseManager('EngineData.db')
+
+        # lighting_factor: Controls the contrast of colour in objects, higher means more contrast
+        self.display_surfaces, self.display_lines, self.display_points, \
+        self.debug_mode, self.display_hud, self.display_logo, \
+        self.rotation_factor, self.scaling_factor, self.translation_factor, \
+        self.movement_factor, self.max_frame_rate, self.max_render_distance, \
+        self.min_render_distance, self.lighting_factor , self.point_radius = self.db_manager.load_user_settings(self)
+
+        self.camera = Camera(self)
         self.gui = GUI(self, self.db_manager, width, height)
         self.engine = Engine3D('orthographic', self.gui.viewer_centre)
 
@@ -82,9 +57,17 @@ class EngineClient():
         self.logo = pygame.image.load('FL3D_small.png')
         self.logo_size = (197, 70)
 
+    def reset_rotation_anchor(self):
+        self.rotation_anchor = self.engine.entities_centre()
+
+    def reset_fps_graph(self):
+        self.fps_array, self.time_array = [], []
 
     def save_world(self):
         self.db_manager.save_objects(self.engine.objects)
+
+    def remove_world(self):
+        self.db_manager.remove_save()
 
     def debug_display(self, object_3d):
         pygame.draw.circle(self.viewer, (255, 0, 0), (int(object_3d.points.access_index(0, 0)), int(object_3d.points.access_index(0, 1))), self.point_radius, 0)
@@ -96,6 +79,7 @@ class EngineClient():
         self.running_fps = False
         self.running = False
         self.db_manager.update_login_time(self.login_sys.username, datetime.datetime.now())
+        self.db_manager.save_user_settings(self)
         self.db_manager.close_database()
         pygame.quit()
 
@@ -121,6 +105,7 @@ class EngineClient():
                 if event.type == pygame.KEYDOWN:
                     if event.key in self.camera.controls: 
                         self.camera.controls[event.key](self, self.engine)
+                        self.gui.update_object_details()
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     self.check_translation_lines(pygame.mouse.get_pos())
                     self.translating = True
@@ -253,41 +238,23 @@ class EngineClient():
     def render_objects(self):
         self.viewer.fill(self.bg_colour)
         self.engine.clear_rendered_points()
-        for object_3d in self.engine.order_objects().values():
-            if object_3d.check_render_distance(self.max_render_distance, self.min_render_distance):
-                if object_3d.is_visible(self.gui.viewer_width, self.gui.viewer_height):
-                    if self.display_surfaces:
-                        for surface in object_3d.order_surfaces():
-                            surface_points = object_3d.find_points(surface)
-                            if len(surface) > 2:
-                                pygame.draw.polygon(self.viewer, object_3d.map_colour(surface, self.lighting_factor), surface_points)
-
-                    if self.hidden_lines == False:
-                        if self.display_lines:
-                            for point_1, point_2 in object_3d.lines:
-                                pygame.draw.aaline(self.viewer, self.line_colour, object_3d.projected.access_row(point_1)[:2], object_3d.projected.access_row(point_2)[:2])
-
-                        if self.display_points:
-                            for i, point in enumerate(object_3d.projected):
-                                rendered_point = pygame.draw.circle(self.viewer, self.point_colour, (int(point[0]), int(point[1])), self.point_radius, 0)
-                                self.engine.rendered_points.append([rendered_point, point, object_3d, i])
-                else:
-                    self.render_relative_lines(object_3d)
+        if self.display_surfaces:
+            for surface in self.engine.get_surfaces(self):
+                colour, surface = surface[0], surface[1:]
+                pygame.draw.polygon(self.viewer, colour, data_handling.convert_to_int_2d_array(surface))
 
         for object_3d in self.engine.objects.values():
-            if object_3d.check_render_distance(self.max_render_distance, self.min_render_distance):
-                if object_3d.is_visible(self.gui.viewer_width, self.gui.viewer_height):
-                    if self.hidden_lines:
-                        if self.display_lines:
-                            for point_1, point_2 in object_3d.lines:
-                                pygame.draw.aaline(self.viewer, self.line_colour, object_3d.projected.access_row(point_1)[:2], object_3d.projected.access_row(point_2)[:2])
+            if object_3d.is_visible(self.gui.viewer_width, self.gui.viewer_height):
+                if self.display_lines:
+                    for point_1, point_2 in object_3d.lines:
+                        pygame.draw.aaline(self.viewer, self.line_colour, object_3d.projected.access_row(point_1)[:2], object_3d.projected.access_row(point_2)[:2])
 
-                        if self.display_points:
-                            for i, point in enumerate(object_3d.projected):
-                                rendered_point = pygame.draw.circle(self.viewer, self.point_colour, (int(point[0]), int(point[1])), self.point_radius, 0)
-                                self.engine.rendered_points.append([rendered_point, point, object_3d, i])
-                else:
-                    self.render_relative_lines(object_3d)
+                if self.display_points:
+                    for i, point in enumerate(object_3d.projected):
+                        rendered_point = pygame.draw.circle(self.viewer, self.point_colour, (int(point[0]), int(point[1])), self.point_radius, 0)
+                        self.engine.rendered_points.append([rendered_point, point, object_3d, i])
+            else:
+                self.render_relative_lines(object_3d)
 
             if self.debug_mode:
                 self.debug_display(object_3d)

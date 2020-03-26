@@ -42,6 +42,16 @@ def string_to_int_array(string):
         result.append(int(word))
     return result
 
+def string_to_float_array(string):
+    result = []
+    for word in string.split(','):
+        word = word.replace('(', '')
+        word = word.replace(')', '')
+        word = word.replace('[', '')
+        word = word.replace(']', '')
+        result.append(float(word))
+    return result
+
 def div_non_zero(numerator, denominator):
     if denominator != 0:
         return numerator / denominator
@@ -63,4 +73,13 @@ def convert_to_int_array(array):
     result = []
     for element in array:
         result.append(int(element))
+    return result
+
+def convert_to_int_2d_array(array):
+    result = []
+    for row in array:
+        new_row = []
+        for element in row:
+            new_row.append(int(element))
+        result.append(new_row)
     return result

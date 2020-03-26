@@ -1,5 +1,6 @@
 import sqlite3
-from structures import Object3D, Matrix
+from structures import Matrix
+from shapes import Cube, Quad, Plane, Polygon, Sphere, Line2D, Line3D
 import data_handling
 
 class DatabaseManager():
@@ -18,7 +19,19 @@ class DatabaseManager():
                 colour TEXT,
                 points TEXT,
                 lines TEXT,
-                surfaces TEXT
+                surfaces TEXT,
+                position TEXT,
+                type TEXT,
+                start_point TEXT,
+                end_point TEXT,
+                angle FLOAT,
+                magnitude FLOAT,
+                radius FLOAT,
+                verts_res INTEGER,
+                no_points INTEGER,
+                length INTEGER,
+                width INTEGER,
+                height INTEGER
             )
             '''
         self.cursor.execute(object_table)
@@ -35,18 +48,96 @@ class DatabaseManager():
             '''
         self.cursor.execute(users_table)
         print('SUCCESS: Database \'UserData\' built')
+
+        settings_table = '''
+            CREATE TABLE IF NOT EXISTS UserSettings (
+                username TEXT PRIMARY KEY,
+                display_surfaces BOOLEAN,
+                display_lines BOOLEAN,
+                display_points BOOLEAN,
+                debug_mode BOOLEAN,
+                display_hud BOOLEAN,
+                display_logo BOOLEAN,
+                rotation_factor FLOAT,
+                scaling_factor FLOAT,
+                translation_factor FLOAT,
+                movement_factor INTEGER,
+                max_frame_rate INTEGER,
+                max_render_distance FLOAT,
+                min_render_distance FLOAT,
+                lighting_factor FLOAT,
+                point_radius INTEGER,
+
+                FOREIGN KEY (username) REFERENCES UserData (username)
+            )
+        '''
+        self.cursor.execute(settings_table)
+
         self.conn.commit()
+
+    def save_user_settings(self, engine_client):
+        sql = 'INSERT OR REPLACE INTO UserSettings (username, display_surfaces, display_lines, display_points, debug_mode, display_hud, display_logo, rotation_factor, scaling_factor, translation_factor, movement_factor, max_frame_rate, max_render_distance, min_render_distance, lighting_factor, point_radius) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
+        self.cursor.execute(sql, [engine_client.login_sys.get_username(), engine_client.display_surfaces, engine_client.display_lines, engine_client.display_points, engine_client.debug_mode, engine_client.display_hud, \
+            engine_client.display_logo, engine_client.rotation_factor, engine_client.scaling_factor, engine_client.translation_factor, engine_client.movement_factor, engine_client.max_frame_rate, engine_client.max_render_distance, \
+            engine_client.min_render_distance, engine_client.lighting_factor, engine_client.point_radius])
+        self.conn.commit()
+
+    def load_user_settings(self, engine_client):
+        sql = 'SELECT * FROM UserSettings WHERE username = ?'
+        self.cursor.execute(sql, [engine_client.login_sys.get_username()])
+        row = self.cursor.fetchone()
+        if row != None:
+            return row[1:]
+        else:
+            return True, True, True, False, True, True, 0.1, 1.1, 25.0, 1000, 10, 0.0001, 1.25, 2
 
     def save_objects(self, objects):
         for object_3d in objects.values():
-            sql = 'INSERT OR REPLACE INTO ObjectData VALUES (?,?,?,?,?)'
-            self.cursor.execute(sql, [object_3d.name, str(object_3d.colour), str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces)])
+            if object_3d.get_type() == 'Cube':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, length) VALUES (?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), object_3d.get_size()])
+            if object_3d.get_type() == 'Quad':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, length, width, height) VALUES (?,?,?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), object_3d.get_length(), object_3d.get_width(), object_3d.get_height()])
+            if object_3d.get_type() == 'Plane':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, length, width) VALUES (?,?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), object_3d.get_length(), object_3d.get_width()])
+            if object_3d.get_type() == 'Polygon':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, no_points, length) VALUES (?,?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), object_3d.get_no_points(), object_3d.get_size()])
+            if object_3d.get_type() == 'Sphere':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, radius, verts_res) VALUES (?,?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), object_3d.get_radius(), object_3d.get_verts_res()])
+            if object_3d.get_type() == 'Line2D':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, angle, magnitude) VALUES (?,?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), object_3d.get_angle(), object_3d.get_magnitude()])
+            if object_3d.get_type() == 'Line3D':
+                sql = 'INSERT OR REPLACE INTO ObjectData (name, colour, points, lines, surfaces, position, type, start_point, end_point) VALUES (?,?,?,?,?,?,?,?,?)'
+                self.cursor.execute(sql, [object_3d.name, object_3d.colour, str(data_handling.v_strip_2d_array(object_3d.points.access_matrix(), 3)), str(object_3d.lines), str(object_3d.surfaces), str(object_3d.get_position()), object_3d.get_type(), str(object_3d.get_start_point()), str(object_3d.get_end_point())])
         self.conn.commit()
         print('SUCCESS: Object data saved')
 
+    def remove_save(self):
+        sql = 'DELETE FROM ObjectData'
+        self.cursor.execute(sql)
+
     def import_objects(self, engine):
-        for name, colour, points, lines, surfaces in self.cursor.execute('SELECT * FROM ObjectData'):
-            object_3d = Object3D(name, colour)
+        for name, colour, points, lines, surfaces, position, _type, *args in self.cursor.execute('SELECT * FROM ObjectData'):
+            args = [attribute for attribute in args if attribute != None]
+            if _type == 'Cube':
+                object_3d = Cube(name, data_handling.string_to_float_array(position), *args, colour)
+            if _type == 'Quad':
+                object_3d = Quad(name, data_handling.string_to_float_array(position), *args, colour)
+            if _type == 'Plane':
+                object_3d = Plane(name, data_handling.string_to_float_array(position), *args, colour)
+            if _type == 'Polygon':
+                object_3d = Polygon(name, data_handling.string_to_float_array(position), *args, colour)
+            if _type == 'Sphere':
+                object_3d = Sphere(name, data_handling.string_to_float_array(position), *args, colour)
+            if _type == 'Line2D':
+                object_3d = Line2D(name, data_handling.string_to_float_array(position), *args, colour)
+            if _type == 'Line3D':
+                object_3d = Line3D(name, data_handling.string_to_float_array(position), data_handling.string_to_float_array(*args), colour)
             object_3d.add_points(Matrix(data_handling.string_to_2d_float_array(points, 3)))
             object_3d.add_lines(data_handling.string_to_2d_int_array(lines, 2))
             object_3d.add_surfaces(data_handling.string_to_2d_int_array(surfaces, 4))
