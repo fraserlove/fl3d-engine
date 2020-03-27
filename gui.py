@@ -1,3 +1,4 @@
+# Third party modules
 import tkinter, os, time
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
@@ -8,14 +9,16 @@ import matplotlib.animation as animation
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from ctypes import windll
 
+# Project-specific modules
 import data_handling
 from shapes import Cube, Quad, Plane, Polygon, Sphere, Line2D, Line3D
 
 class GUI():
-    def __init__(self, engine_client, db_manager, width, height):
-
+    ''' Renders and updates the Tkinter GUI and the Matplotlib FPS graph. '''
+    def __init__(self, engine_client, db_manager, width, height, path):
         self.engine_client = engine_client
         self.db_manager = db_manager
+        self.path = path
 
         self.gui_width, self.gui_height = width, height
         os_user = windll.user32
@@ -39,7 +42,7 @@ class GUI():
         self.window.geometry("{}x{}+{}+{}".format(self.gui_width, self.gui_height, int((self.x_off - self.gui_width) / 2), int((self.y_off - self.gui_height) / 2)))
         self.window.overrideredirect(True)
         self.window.title('FL3D Engine')
-        self.window.iconbitmap('ICON.ico')
+        self.window.iconbitmap(r'{}\images\ICON.ico'.format(path))
 
         self.gui_controls_header_padding = 10
         self.gui_controls_separator_padding = 50
@@ -181,14 +184,15 @@ class GUI():
 
         self.gui_top_bar_button_padding = 10
 
-        self.exit_img_raw = Image.open('EXIT.png')
-        self.exit_img = ImageTk.PhotoImage(self.exit_img_raw)
+        exit_img = Image.open(r'{}\images\EXIT.png'.format(self.path))
+        self.exit_img = ImageTk.PhotoImage(exit_img)
         self.exit_button = tkinter.Button(self.top_bar, text = "Exit", width = self.gui_exit_button_size[0], height = self.gui_exit_button_size[1], command = self.engine_client.close_window, borderwidth=0, bd = -2, bg = self.gui_bg_colour, activebackground=self.gui_highlight_bg_colour)
         self.exit_button.config(image = self.exit_img)
         self.exit_button.image = self.exit_img
         self.exit_button.place(x = self.gui_width - self.gui_exit_button_size[0], y = -3, anchor = 'nw')
 
-        self.close_img = ImageTk.PhotoImage(file = 'CLOSE.png')
+        close_img = Image.open(r'{}\images\CLOSE.png'.format(self.path))
+        self.close_img = ImageTk.PhotoImage(close_img)
         self.close_button = tkinter.Button(self.top_bar, text = "Close", width = self.gui_exit_button_size[0], height = self.gui_exit_button_size[1], command = self.engine_client.minimise_window, borderwidth=0, bd = -2, bg = self.gui_bg_colour, activebackground=self.gui_highlight_bg_colour)
         self.close_button.config(image = self.close_img)
         self.close_button.place(x = self.gui_width - self.gui_exit_button_size[0] * 2 - self.gui_top_bar_button_padding, y = -3, anchor = 'nw')
@@ -546,8 +550,9 @@ class GUI():
         object_name_entry = tkinter.Entry(self.properties_window, textvariable = self.object_name, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
         object_name_entry.place(x = 8, y = 55, anchor = 'nw', height = 18, width = 182)
 
-        self.down_img_raw = Image.open('DOWN.png')
-        self.down_img = ImageTk.PhotoImage(self.down_img_raw)
+
+        down_img = Image.open(r'{}\images\DOWN.png'.format(self.path))
+        self.down_img = ImageTk.PhotoImage(down_img)
         object_colour_label = tkinter.Label(self.properties_window, text = 'Object Colour', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         object_colour_label.place(x = 5, y = 80, anchor = 'nw')
         self.object_colour_options = tkinter.OptionMenu(self.properties_window, self.object_colour, *colours, command = self.close_menu)
@@ -941,7 +946,7 @@ class GUI():
         self.reset_anchor_button = tkinter.Button(self.control, text="Reset Anchor", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.engine_client.reset_rotation_anchor, font=self.gui_small_button_font)   
         self.reset_anchor_button.place(x= self.control_width - 20, y = self.gui_button_padding[1] + self.gui_button_offset * 1.5, anchor = 'ne', height = 25)
 
-        self.clear_worldspace_button = tkinter.Button(self.control, text="Clear Worlds", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.clear_worldspace, font=self.gui_small_button_font)
+        self.clear_worldspace_button = tkinter.Button(self.control, text="Clear World", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.clear_worldspace, font=self.gui_small_button_font)
         self.clear_worldspace_button.place(x= 20, y = self.gui_button_padding[1] + self.gui_button_offset * 2.5, anchor = 'nw', height = 25)
 
         self.delete_worldspace_button = tkinter.Button(self.control, text="Delete Save", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.delete_world, font=self.gui_small_button_font)
@@ -1168,6 +1173,7 @@ class GUI():
         self.point_radius_value.config(text = '{0:.2f}'.format(self.engine_client.point_radius))
 
 class FloatingWindow(tkinter.Toplevel):
+    ''' A subclass of the Tkinter Toplevel class to allow for dragging the window across the display. '''
     def __init__(self, *args, **kwargs):
         tkinter.Toplevel.__init__(self, *args, **kwargs)
 
@@ -1192,6 +1198,7 @@ class FloatingWindow(tkinter.Toplevel):
         self.geometry("+{}+{}".format(x, y))
 
 class CoordinateInput:
+    ''' A set of three input boxes and corresponding labels to allow for the user to enter coordinates the engine. '''
     def __init__(self, x, y, z, point, engine, viewer):
         self.input_boxes = []
         self.input_box_y_padding = 20
@@ -1225,7 +1232,8 @@ class CoordinateInput:
         for i, input_box in enumerate(self.input_boxes):
             input_box.reposition(x, y + self.input_box_y_padding * i)
 
-class InputBox:
+class InputBox():
+    ''' A text box that allows for user input within the engine itself. '''
     def __init__(self, x, y, point, text, coordinate_input, index, axis):
         self.width, self.height = 30, 15
         self.text_box_padding = (25, 9)

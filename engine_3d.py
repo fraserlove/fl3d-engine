@@ -1,9 +1,12 @@
+# Third party modules
 import time, copy
 
+# Project-specific modules
 import data_handling
 import matrix_math
 
 class Engine3D:
+    ''' Provides functionality used to translate, and manipulate 3D objects. '''
     def __init__(self, projection_type = 'orthographic', projection_anchor = (0, 0, 0, 0)):
         self.objects = {}
         self.translation_lines = None

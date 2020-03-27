@@ -1,7 +1,9 @@
+# Third party modules
 import sys, os, time, datetime, threading
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
+# Project-specific modules
 from engine_3d import Engine3D
 from shapes import GUILines
 from database_manager import DatabaseManager
@@ -11,7 +13,8 @@ from launcher import Launcher
 import data_handling
 
 class EngineClient():
-    def __init__(self, width, height, login_sys):
+    ''' Updates and controls the Engine and GUI Objects to display the running engine. '''
+    def __init__(self, width, height, login_sys, path):
 
         self.line_colour = (255, 255, 255)
         self.point_colour = (255, 255, 255)
@@ -26,17 +29,14 @@ class EngineClient():
         self.fps_graph_interval = 500
         self.start_time = time.time()
 
-        self.chosen_point = None
-        self.chosen_rotation_anchor = None
+        # Initialising all variables used with chosen point and chosen rotation anchor to None
+        self.chosen_point, self.chosen_rotation_anchor, self.input_boxes, self.responsive_text = None, None, None, None
         self.clickable_radius = 5 # The radius at which a point can be clicked beyond its shown radius
         self.translating, self.translating_x, self.translating_y = False, False, False
-        self.input_boxes = None
-        self.responsive_text = None
-        self.use_custom_rotation_anchor = False
-        self.running = True
+        self.use_custom_rotation_anchor, self.running = False, True
 
         self.login_sys = login_sys
-        self.db_manager = DatabaseManager('EngineData.db')
+        self.db_manager = DatabaseManager(r'{}\data\EngineData.db'.format(path))
 
         # lighting_factor: Controls the contrast of colour in objects, higher means more contrast
         self.display_surfaces, self.display_lines, self.display_points, \
@@ -46,15 +46,15 @@ class EngineClient():
         self.min_render_distance, self.lighting_factor , self.point_radius = self.db_manager.load_user_settings(self)
 
         self.camera = Camera(self)
-        self.gui = GUI(self, self.db_manager, width, height)
+        self.gui = GUI(self, self.db_manager, width, height, path)
         self.engine = Engine3D('orthographic', self.gui.viewer_centre)
 
         pygame.init()
         self.viewer = pygame.display.set_mode((self.gui.viewer_width, self.gui.viewer_height))
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font('fonts/Montserrat-SemiBold.ttf', 16)
+        self.font = pygame.font.Font(r'{}\fonts\Montserrat-SemiBold.ttf'.format(path), 16)
         pygame.key.set_repeat(1, self.movement_factor)
-        self.logo = pygame.image.load('FL3D_small.png')
+        self.logo = pygame.image.load(r'{}\images\FL3D_small.png'.format(path))
         self.logo_size = (197, 70)
 
     def reset_rotation_anchor(self):
@@ -310,9 +310,10 @@ class EngineClient():
                 pygame.draw.line(self.viewer, self.relative_line_colour, (0,self.gui.viewer_height), (self.gui.viewer_width,self.gui.viewer_height), 5)
 
 def initialise(width, height):
-    login_sys = Launcher(800, 400)
+    path = os.path.dirname(os.path.abspath(__file__))
+    login_sys = Launcher(800, 400, path)
     if not login_sys.launcher_closed():
-        display = EngineClient(width, height, login_sys)
+        display = EngineClient(width, height, login_sys, path)
         display.run()
 
 if __name__ == '__main__':

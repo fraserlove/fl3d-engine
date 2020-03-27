@@ -1,12 +1,15 @@
-import tkinter, datetime
+# Third party modules
+import tkinter, datetime, os
 from PIL import Image, ImageTk
 from ctypes import windll
 
+# Project-specific modules
 from gui import FloatingWindow
 from database_manager import DatabaseManager
 
 class Launcher():
-    def __init__(self, width, height):
+    ''' Displays a login window and option to allow users to create an account. '''
+    def __init__(self, width, height, path):
         self.width, self.height = width, height
 
         os_user = windll.user32
@@ -18,8 +21,6 @@ class Launcher():
         self.window = FloatingWindow(self.root)
         self.window.geometry("{}x{}+{}+{}".format(self.width, self.height, int((self.x_off - self.width) / 2), int((self.y_off - self.height) / 2)))
         self.window.overrideredirect(True)
-        self.window.title('FL3D Engine Launcher')
-        self.window.iconbitmap('ICON.ico')
 
         self.exit_button_size = (30, 30)
         self.sign_in_button_size = (10, 1)
@@ -52,15 +53,12 @@ class Launcher():
         self.error_label_font = ('Montserrat Medium', '10')
         self.signup_label_font = ('Montserrat Light', '12')
 
-        self.GWL_EXSTYLE=-20
-        self.WS_EX_APPWINDOW=0x00040000
-        self.WS_EX_TOOLWINDOW=0x00000080 # Used to show icon in task bar when in default window mode
-
-        self.db_manager = DatabaseManager('EngineData.db')
+        self.db_manager = DatabaseManager(r'{}\data\EngineData.db'.format(path))
         self._launcher_closed = False
         self.error_text = None
         self.account_created_text = None
         self.new_sign_in_button_canvas = None
+        self.path = path
 
         self.construct_launcher()
         self.root.mainloop()
@@ -85,10 +83,14 @@ class Launcher():
         self.button_canvas = tkinter.Canvas(self.canvas, width = self.exit_button_size[0], height = self.exit_button_size[1], bd=0, highlightthickness=0)
         self.button_canvas.place(x = self.width, y = 0, anchor = 'ne')
 
-        self.bg_img = ImageTk.PhotoImage(file = 'LAUNCHER_BG.png')
-        self.bg_top_corner_img = ImageTk.PhotoImage(file = 'LAUNCHER_BG_TOPCORNER.png')
-        self.bg_top_corner_hover_img = ImageTk.PhotoImage(file = 'LAUNCHER_BG_TOPCORNER_HOVER.png')
-        self.launcher_exit_img = ImageTk.PhotoImage(file = 'EXIT.png')
+        bg_img = Image.open(r'{}\images\LAUNCHER_BG.png'.format(self.path))
+        bg_top_corner_img = Image.open(r'{}\images\LAUNCHER_BG_TOPCORNER.png'.format(self.path))
+        bg_top_corner_hover_img = Image.open(r'{}\images\LAUNCHER_BG_TOPCORNER_HOVER.png'.format(self.path))
+        launcher_exit_img = Image.open(r'{}\images\EXIT.png'.format(self.path))
+        self.bg_img = ImageTk.PhotoImage(bg_img)
+        self.bg_top_corner_img = ImageTk.PhotoImage(bg_top_corner_img)
+        self.bg_top_corner_hover_img = ImageTk.PhotoImage(bg_top_corner_hover_img)
+        self.launcher_exit_img = ImageTk.PhotoImage(launcher_exit_img)
         self.username_entry = tkinter.Entry(self.window, textvariable = self.entered_username, width = self.entry_size, font = self.entry_font, bg = self.bg_colour, fg = self.text_colour, highlightcolor = self.highlight_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.highlight_bg_colour)
         self.password_entry = tkinter.Entry(self.window, textvariable = self.entered_password, width = self.entry_size, font = self.entry_font, bg = self.bg_colour, fg = self.text_colour, highlightcolor = self.highlight_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.highlight_bg_colour, show="●")
         self.sign_in_button = tkinter.Button(self.window, text = 'SIGN IN', width = self.sign_in_button_size[0], height = self.sign_in_button_size[1], font = self.sign_in_button_font, bg = self.bg_colour, fg = self.text_colour, activeforeground = self.highlight_fg_colour, bd = 0, activebackground = self.highlight_bg_colour, command = lambda: self.sign_in(self.entered_username.get(), self.entered_password.get()))

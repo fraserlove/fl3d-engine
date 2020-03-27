@@ -1,9 +1,11 @@
+# Third party modules
 import math
+
+# Project-specific modules
 from structures import Object3D, Matrix
 import data_handling
 
 class Cube(Object3D):
-    """ Cubes are constructed from the bottom left corner out to a defined size """
     def __init__(self, name, position, size, colour = 'grey'):
         Object3D.__init__(self, name, colour, position, 'Cube')
         self.size = size
@@ -27,7 +29,6 @@ class Cube(Object3D):
         self.create()
 
 class Quad(Object3D):
-    """ Quads are constructed from the bottom left corner out to a defined size """
     def __init__(self, name, position, length, width, height, colour = 'grey'):
         Object3D.__init__(self, name, colour, position, 'Quad')
         self.length, self.width, self.height = length, width, height
@@ -72,7 +73,6 @@ class Quad(Object3D):
         self.set_height(height)
 
 class Plane(Object3D):
-    """ Planes are constructed from the bottom left corner out to a defined size """
     def __init__(self, name, position, length, width, colour = 'grey'):
         Object3D.__init__(self, name, colour, position, 'Plane', True)
         self.length, self.width = length, width

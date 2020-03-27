@@ -1,8 +1,10 @@
+# Third party modules
 import pygame
 
 class Camera():
+    ''' An interface between pygame keyboard events and Engine3D's transformation functions. '''
     def __init__(self, display):
-
+        # Maps the pygame keyboard events to a lambda function controlling a specific transformation if there are currently text boxes accepting keyboard keys as input.
         self.controls = {
             pygame.K_LEFT: (lambda self, engine: self.engine.translate(-display.translation_factor, 0, 0) if not self.text_boxes_accepting_input() else None),
             pygame.K_RIGHT: (lambda self, engine: self.engine.translate(display.translation_factor, 0, 0) if not self.text_boxes_accepting_input() else None),
@@ -15,5 +17,5 @@ class Camera():
             pygame.K_a: (lambda self, engine: self.engine.rotate(0, display.rotation_factor, 0, anchor = display.rotation_anchor) if not self.text_boxes_accepting_input() else None),
             pygame.K_s: (lambda self, engine: self.engine.rotate(0, -display.rotation_factor, 0, anchor = display.rotation_anchor) if not self.text_boxes_accepting_input() else None),
             pygame.K_z: (lambda self, engine: self.engine.rotate(0, 0, display.rotation_factor, anchor = display.rotation_anchor) if not self.text_boxes_accepting_input() else None),
-            pygame.K_x: (lambda self, engine: self.engine.rotate(0, 0, -display.rotation_factor, anchor = display.rotation_anchor) if not self.text_boxes_accepting_input() else None),
+            pygame.K_x: (lambda self, engine: self.engine.rotate(0, 0, -display.rotation_factor, anchor = display.rotation_anchor) if not self.text_boxes_accepting_input() else None)
         }

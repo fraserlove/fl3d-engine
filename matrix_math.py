@@ -1,9 +1,12 @@
+# Third party modules
 import math
-import structures # Importing Matrix and Point objects from math_structures module
 
-""" Provides mathematical functions for used in math structures """
+# Project-specific modules
+import structures
 
-""" Multiplies two matrices together if they are conformable """
+''' Provides mathematical functions for used in math structures '''
+
+''' Multiplies two matrices together if they are conformable '''
 def multiply(matrix_1, matrix_2):
     if matrix_1.no_cols() != matrix_2.no_rows():
         print("ERROR: Matrix 1's {} columns do not match Matrix 2's {} rows".format(matrix_1.no_cols(), matrix_2.no_rows()))
@@ -20,7 +23,7 @@ def multiply(matrix_1, matrix_2):
     return result
 
 def h_stack(matrix_1, matrix_2):
-    """ Adds matrix_2 to the right columns of matrix_1 """
+    ''' Adds matrix_2 to the right columns of matrix_1 '''
     result = structures.Matrix(matrix_1.no_rows(), matrix_1.no_cols() + matrix_2.no_cols())
     for y in range(matrix_1.no_rows()):
         result.set_row(y, matrix_1.access_row(y) + matrix_2.access_row(y))
@@ -42,7 +45,7 @@ def inverse_vector(vector):
     return new_vector
 
 def orthographic_projection_matrix():
-    """ Returns a matrix used in projection to provide depth """
+    ''' Returns a matrix used in projection to provide depth '''
     return structures.Matrix([
         [1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -51,7 +54,7 @@ def orthographic_projection_matrix():
     ])
 
 def perspective_projection_matrix(dz):
-    """ Returns a matrix used in projection to provide depth """
+    ''' Returns a matrix used in projection to provide depth '''
     if (10 - dz) == 0:
         z = 0
     else:
@@ -64,7 +67,7 @@ def perspective_projection_matrix(dz):
     ])
 
 def translation_matrix(dx = 0, dy = 0, dz = 0):
-    """ Returns a matrix for a translation of (dx, dy, dz) """
+    ''' Returns a matrix for a translation of (dx, dy, dz) '''
     return structures.Matrix([
         [1, 0, 0, 0],
         [0, 1, 0, 0],
@@ -73,7 +76,7 @@ def translation_matrix(dx = 0, dy = 0, dz = 0):
     ])
 
 def scale_matrix(kx, ky, kz):
-    """ Returns a matrix for scaling by (kx, ky, kz) """
+    ''' Returns a matrix for scaling by (kx, ky, kz) '''
     return structures.Matrix([
         [kx, 0, 0, 0],
         [0, ky, 0, 0],
@@ -82,7 +85,7 @@ def scale_matrix(kx, ky, kz):
     ])
 
 def rotate_x_matrix(rx):
-    """ Returns a matrix for rotation about the x-axis by rx radians """
+    ''' Returns a matrix for rotation about the x-axis by rx radians '''
     cos = math.cos(rx)
     sin = math.sin(rx)
     return structures.Matrix([
@@ -93,7 +96,7 @@ def rotate_x_matrix(rx):
     ])
 
 def rotate_y_matrix(ry):
-    """ Returns a matrix for rotation about the x=y-axis by ry radians """
+    ''' Returns a matrix for rotation about the x=y-axis by ry radians '''
     cos = math.cos(ry)
     sin = math.sin(ry)
     return structures.Matrix([
@@ -104,7 +107,7 @@ def rotate_y_matrix(ry):
     ])
 
 def rotate_z_matrix(rz):
-    """ Returns a matrix for rotation about the z-axis by rz radians """
+    ''' Returns a matrix for rotation about the z-axis by rz radians '''
     cos = math.cos(rz)
     sin = math.sin(rz)
     return structures.Matrix([

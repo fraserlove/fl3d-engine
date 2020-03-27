@@ -1,11 +1,14 @@
+# Third party modules
 import math
+
+# Project-specific modules
 import matrix_math
 import data_handling
 
 class Matrix():
-    """ A matrix object that has zero based indexing"""
+    ''' A matrix object that has zero based indexing'''
     def __init__(self, *args):
-        """ Overloading to create a new matrix with specified dimension or initialise with a 2d array """
+        ''' Overloading to create a new matrix with specified dimension or initialise with a 2d array '''
         if len(args) > 1:
             self.rows = args[0]
             self.cols = args[1]
@@ -28,7 +31,7 @@ class Matrix():
         return self.rows
 
     def show(self):
-        """ Displays the entire matrix and its dimension """
+        ''' Displays the entire matrix and its dimension '''
         print("Matrix: ", self.rows, "x", self.cols)
         for y in range(self.rows):
             for x in range(self.cols):
@@ -92,8 +95,8 @@ class Object3D():
         return data_handling.div_non_zero(sum, len(surface))
 
     def order_surfaces(self):
-        """ Surfaces must be ordered so that the closest surfaces are drawn first to remove display errors where surfaces furhter behind are drawn over closer surfaces """
-        """ Uses insertion sort """
+        ''' Surfaces must be ordered so that the closest surfaces are drawn first to remove display errors where surfaces furhter behind are drawn over closer surfaces '''
+        ''' Uses insertion sort '''
         for i in range(len(self.surfaces)):
             current = self.surfaces[i]
             index = i
@@ -104,7 +107,7 @@ class Object3D():
         return self.surfaces
         
     def find_points(self, surface):
-        """ Returns a list of coordinates in a given surface """
+        ''' Returns a list of coordinates in a given surface '''
         points = []
         for point in surface:
             points.append([int(self.projected.access_row(point)[0]), int(self.projected.access_row(point)[1])])
@@ -124,7 +127,7 @@ class Object3D():
             print ('ERROR: Choose a colour from: \'red\', \'magenta\', \'green\', \'blue\', \'yellow\', \'cyan\', \'grey\'')
 
     def viewer_relativity(self, viewer_width, viewer_height):
-        """ Returns an array of the directions to which the object is off the screen """
+        ''' Returns an array of the directions to which the object is off the screen '''
         x, y = self.find_centre()[0], self.find_centre()[1]
         directions = []
         if x < 0:
@@ -184,7 +187,7 @@ class Object3D():
         self.points = matrix_math.multiply(self.points, translation_matrix)
 
     def scale(self, scale_factor, anchor = None): # Anchor is a point object which stores the point to scale from
-        """ Scales the object from an arbetrary point """
+        ''' Scales the object from an arbetrary point '''
         if anchor == None:  # If no anchor is provided, scale from objects centre
             anchor = self.find_centre()
         scale_matrix = matrix_math.scale_matrix(*scale_factor)
