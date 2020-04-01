@@ -174,11 +174,11 @@ class GUI():
     def hover_leave_close_button(self, event):
         self.close_button['bg'] = self.gui_bg_colour
 
-    def hover_enter_import_button(self, event):
-        self.import_objects_button['bg'] = self.gui_hover_fg_colour
+    def hover_enter_button(self, event, button):
+        button['bg'] = self.gui_hover_fg_colour
 
-    def hover_leave_import_button(self, event):
-        self.import_objects_button['bg'] = self.gui_fg_colour
+    def hover_leave_button(self, event, button):
+        button['bg'] = self.gui_fg_colour
 
     def construct_top_bar(self):
 
@@ -240,6 +240,9 @@ class GUI():
         self.add_object_button.place(x= self.details_width - self.add_object_button_x_offset, y = self.details_height - 10, anchor = 'se', height = 22)
         self.add_object_lb.bind('<Double-Button-1>', self.check_if_selected_object)
 
+        self.add_object_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.add_object_button))
+        self.add_object_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.add_object_button))
+
         world_space_label = tkinter.Label(self.details, text='World Space', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
         world_space_label.place(x = self.details_width - self.gui_world_space_padding, y = 5, anchor = 'n')
 
@@ -249,6 +252,15 @@ class GUI():
         self.delete_world_object_button = tkinter.Button(self.details, text="Delete Object", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.delete_world_object, font=self.gui_button_font)
         self.edit_world_object_button = tkinter.Button(self.details, text="Edit Object", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.edit_world_object, font=self.gui_button_font)
         self.copy_world_object_button = tkinter.Button(self.details, text="Copy Object", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.copy_world_object, font=self.gui_button_font)
+
+        self.delete_world_object_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.delete_world_object_button))
+        self.delete_world_object_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.delete_world_object_button))
+
+        self.edit_world_object_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.edit_world_object_button))
+        self.edit_world_object_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.edit_world_object_button))
+
+        self.copy_world_object_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.copy_world_object_button))
+        self.copy_world_object_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.copy_world_object_button))
 
         self.window.bind('<ButtonPress-1>', self.deselect_box)
         self.window.bind('<ButtonRelease-1>', self.check_object_details)
@@ -417,7 +429,7 @@ class GUI():
 
     def copy_world_object(self, event = None):
         self.properties_window = FloatingWindow(self.root, bg = self.gui_bg_colour)
-        self.properties_window.geometry("{}x{}+{}+{}".format(self.properties_window_width, 110, int((self.x_off - self.properties_window_width) / 2), int((self.y_off - self.properties_window_height) / 2)))
+        self.properties_window.geometry("{}x{}+{}+{}".format(self.properties_window_width, 120, int((self.x_off - self.properties_window_width) / 2), int((self.y_off - self.properties_window_height) / 2)))
         self.properties_window.overrideredirect(True)
         self.properties_window.attributes('-topmost', True)
         self.properties_window.create_grip(self.properties_window)
@@ -440,6 +452,9 @@ class GUI():
 
         copy_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg=self.gui_header_colour, bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= lambda: self.copy_object(object_name, self.object_name.get()), font=self.gui_button_font)
         copy_button.place(x = 190, y = 85, anchor = 'ne', height = 22)
+
+        copy_button.bind('<Enter>', lambda event: self.hover_enter_button(event, copy_button))
+        copy_button.bind('<Leave>', lambda event: self.hover_leave_button(event, copy_button))
 
     def copy_object(self, object_name, new_object_name):
         self.engine_client.engine.copy_object(self.engine_client.engine.objects[object_name], new_object_name)
@@ -519,6 +534,9 @@ class GUI():
             self.create_button.config(text = 'Edit \'{}\''.format(object_name), command = lambda object_name: self.update_line3D_details(object_name))
             self.create_button.place(x = 190, y = 235, anchor = 'ne', height = 22)
 
+        self.create_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.create_button))
+        self.create_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.create_button))
+
     def open_object_properties_window(self, listbox):
         self.properties_window = FloatingWindow(self.root, bg = self.gui_bg_colour)
         self.properties_window.geometry("{}x{}+{}+{}".format(self.properties_window_width, self.properties_window_height, int((self.x_off - self.properties_window_width) / 2), int((self.y_off - self.properties_window_height) / 2)))
@@ -549,7 +567,6 @@ class GUI():
         object_name_label.place(x = 5, y = 30, anchor = 'nw')
         object_name_entry = tkinter.Entry(self.properties_window, textvariable = self.object_name, bg=self.gui_small_button_colour, fg=self.gui_window_title_colour, font=self.gui_list_box_font, highlightcolor = self.gui_fg_colour, bd = 0, highlightthickness = '1', highlightbackground = self.gui_embeded_colour)
         object_name_entry.place(x = 8, y = 55, anchor = 'nw', height = 18, width = 182)
-
 
         down_img = Image.open(r'{}\images\DOWN.png'.format(self.path))
         self.down_img = ImageTk.PhotoImage(down_img)
@@ -701,6 +718,9 @@ class GUI():
             self.create_button = tkinter.Button(self.properties_window, text="Create " + object_type, fg=self.gui_header_colour, bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.create_line3D, font=self.gui_button_font)
             self.create_button.place(x = 190, y = 235, anchor = 'ne', height = 22)
             self.properties_window.geometry("{}x{}".format(self.properties_window_width, 270))
+
+        self.create_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.create_button))
+        self.create_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.create_button))
 
     def create_cube(self):
         position = self.position_x.get(), self.position_y.get(), self.position_z.get()
@@ -952,8 +972,23 @@ class GUI():
         self.delete_worldspace_button = tkinter.Button(self.control, text="Delete Save", fg="white", bg= self.gui_fg_colour, borderwidth=0, height = 1, width = 12, activebackground=self.gui_highlight_fg_colour, activeforeground="white", command= self.delete_world, font=self.gui_small_button_font)
         self.delete_worldspace_button.place(x= self.control_width - 20, y = self.gui_button_padding[1] + self.gui_button_offset * 2.5, anchor = 'ne', height = 25)
 
-        self.import_objects_button.bind('<Enter>', self.hover_enter_import_button)
-        self.import_objects_button.bind('<Leave>', self.hover_leave_import_button)
+        self.import_objects_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.import_objects_button))
+        self.import_objects_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.import_objects_button))
+
+        self.save_objects_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.save_objects_button))
+        self.save_objects_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.save_objects_button))
+
+        self.reset_fps_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.reset_fps_button))
+        self.reset_fps_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.reset_fps_button))
+
+        self.reset_anchor_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.reset_anchor_button))
+        self.reset_anchor_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.reset_anchor_button))
+
+        self.clear_worldspace_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.clear_worldspace_button))
+        self.clear_worldspace_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.clear_worldspace_button))
+
+        self.delete_worldspace_button.bind('<Enter>', lambda event: self.hover_enter_button(event, self.delete_worldspace_button))
+        self.delete_worldspace_button.bind('<Leave>', lambda event: self.hover_leave_button(event, self.delete_worldspace_button))
 
     def construct_linear_sliders(self):
         rotation_factor_label = tkinter.Label(self.control, text='Rotation Factor', bg=self.gui_bg_colour, fg=self.gui_window_title_colour, font=self.gui_label_font)
