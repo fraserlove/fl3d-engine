@@ -1,5 +1,5 @@
 # Third party modules
-import sys, os, time, datetime, threading
+import sys, os, time, datetime
 os.environ['PYGAME_HIDE_SUPPORT_PROMPT'] = "hide"
 import pygame
 
@@ -284,8 +284,8 @@ class EngineClient():
 
     def render_translation_lines(self):
         translation_lines = self.engine.get_translation_lines()
-        x_line = pygame.draw.line(self.viewer, self.gui.gui_translation_lines_colour_x, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(1)[:2]), self.gui.translation_line_width)
-        y_line = pygame.draw.line(self.viewer, self.gui.gui_translation_lines_colour_y, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(2)[:2]), self.gui.translation_line_width)
+        x_line = pygame.draw.line(self.viewer, self.gui.translation_lines_colour_x, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(1)[:2]), self.gui.translation_line_width)
+        y_line = pygame.draw.line(self.viewer, self.gui.translation_lines_colour_y, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), data_handling.convert_to_int_array(translation_lines.projected.access_row(2)[:2]), self.gui.translation_line_width)
         rendered_point = pygame.draw.circle(self.viewer, self.point_colour, data_handling.convert_to_int_array(translation_lines.projected.access_row(0)[:2]), self.point_radius, 0)
         self.engine.rendered_translation_lines = [x_line, y_line]
 

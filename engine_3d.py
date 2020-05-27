@@ -5,7 +5,7 @@ import time, copy
 import data_handling
 import matrix_math
 
-class Engine3D:
+class Engine3D():
     ''' Provides functionality used to translate, and manipulate 3D objects. '''
     def __init__(self, projection_type = 'orthographic', projection_anchor = (0, 0, 0, 0)):
         self.objects = {}
@@ -79,17 +79,6 @@ class Engine3D:
         if no_points > 0:
            centre = (total_x / no_points, total_y / no_points, total_z / no_points, 0)
         return centre
-
-    def order_objects(self):
-        ordered_objects = self.objects.copy()
-        for i in range(len(ordered_objects)):
-            current = ordered_objects[list(ordered_objects.keys())[i]]
-            index = i
-            while index > 0 and ordered_objects[list(ordered_objects.keys())[index-1]].find_centre()[2] > current.find_centre()[2]:
-                ordered_objects[list(ordered_objects.keys())[index]] = ordered_objects[list(ordered_objects.keys())[index - 1]]
-                index -= 1
-            ordered_objects[list(ordered_objects.keys())[index]] = current
-        return ordered_objects
 
     def surface_mean_y(self, surface):
         sum = 0

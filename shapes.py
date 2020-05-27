@@ -209,7 +209,9 @@ class Line2D(Object3D):
         if position == None:
             position = self.position
         cx, cy, cz = position
-        self.add_points(Matrix([[cx, cy, cz], [cx + math.cos(math.radians(-self.degrees)) * self.magnitude, cy + math.sin(math.radians(-self.degrees)) * self.magnitude, cz]]))
+        angle = math.radians(self.degrees)
+        nx, ny = cx + (math.cos(angle) * self.magnitude), cy - (math.sin(angle) * self.magnitude)
+        self.add_points(Matrix([[cx, cy, cz], [nx, ny, cz]]))
         self.add_lines([(0,1)])
         self.projected = self.points
 
